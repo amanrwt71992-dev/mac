@@ -11,7 +11,8 @@
 //      OOXMLKit           (M1) adds ZIPFoundation. Still cross-platform.
 //      IntelligenceKit    Foundation + FoundationModels behind `canImport`.
 //      LayoutKit          CoreText. macOS only; guarded so Linux still builds.
-//      EditorKit          AppKit. macOS only; guarded.
+//      EditorKit          CoreKit only. Editing, selection and undo; no layout,
+//                         no AppKit in M0 (the AppKit surface arrives in M1).
 //      GalleyApp          the executable.
 //
 //  Nothing may import EditorKit or GalleyApp.
@@ -43,9 +44,12 @@ let package = Package(
             dependencies: ["CoreKit"]
         ),
 
+        // EditorKit depends on CoreKit alone. It may not import LayoutKit: the
+        // layout is derived state owned by the document controller, and the CI
+        // job `checks` fails the build if that boundary is crossed.
         .target(
             name: "EditorKit",
-            dependencies: ["CoreKit", "LayoutKit"]
+            dependencies: ["CoreKit"]
         ),
 
         .executableTarget(

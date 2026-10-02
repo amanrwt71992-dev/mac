@@ -63,6 +63,10 @@ jobs:
           }
           check_absent Sources/CoreKit "AppKit, CoreText, UIKit or SwiftUI" "AppKit|CoreText|UIKit|SwiftUI|Carbon"
           check_absent Sources/LayoutKit "AppKit, UIKit or SwiftUI" "AppKit|UIKit|SwiftUI|Carbon"
+          # EditorKit must not know about layout. The snapshot is derived state
+          # owned by the controller; letting the editor hold one is how layout
+          # invalidation gets scattered across every editing path.
+          check_absent Sources/EditorKit "LayoutKit, AppKit, UIKit or SwiftUI" "LayoutKit|AppKit|UIKit|SwiftUI|Carbon"
           check_absent Sources/IntelligenceKit "AppKit, CoreText, UIKit or SwiftUI" "AppKit|CoreText|UIKit|SwiftUI|Carbon"
 
           # Nothing may import EditorKit or the app target: the dependency flow

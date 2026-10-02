@@ -197,10 +197,17 @@ public final class CoreTextMeasurer: TextMeasurer, @unchecked Sendable {
         if spec.bold { traits.insert(.traitBold) }
         if spec.italic { traits.insert(.traitItalic) }
         if !traits.isEmpty {
-            attributes[kCTFontSymbolicTraitAttribute] = NSNumber(value: traits.rawValue)
+            // `kCTFontTraitsAttribute` holds a *dictionary* of trait keys, of
+            // which the symbolic traits are one entry — not the symbolic value
+            // directly. There is no `kCTFontSymbolicTraitAttribute`; the symbol
+            // is `kCTFontSymbolicTraitKey`, and it is a key inside that
+            // dictionary.
+            attributes[kCTFontTraitsAttribute] = [
+                kCTFontSymbolicTraitKey: NSNumber(value: traits.rawValue)
+            ] as CFDictionary
         }
 
-        // Bold and italic go into the descriptor as an attribute rather than
+        // Bold and italic go into the descriptor as attributes rather than
         // through `CTFontDescriptorCreateCopyWithSymbolicTraits`. One descriptor
         // built with everything in it is fewer CoreText round-trips than two, and
         // it does not depend on an API whose imported arity has differed between

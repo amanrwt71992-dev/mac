@@ -5,21 +5,23 @@ import CoreKit
 
 /// The complete editing state of one open document.
 ///
-/// A value type. The document, the selection, the undo stack and the layout
-/// snapshot travel together because they are invalidated together: an edit
-/// changes all four, and having them in separate places is how an editor ends up
-/// showing a caret on a page that no longer exists.
+/// A value type: the document, the selection and the undo stack travel together
+/// because an edit invalidates all three at once, and keeping them apart is how
+/// an editor ends up with a caret on a page that no longer exists.
 ///
-/// `LayoutKit` is intentionally *not* imported here. The editor produces model
-/// changes; something above it (the document controller) feeds the new model to
-/// the layout engine and stores the result back. That keeps the editing layer
-/// buildable and testable without CoreText.
+/// It deliberately holds **no** layout snapshot, and EditorKit does not import
+/// LayoutKit. The layout is derived state: the document controller owns it,
+/// re-runs the pipeline when the model changes, and swaps the result in. Storing
+/// a snapshot here would mean the editor has to know that every mutation stales
+/// it — which is what the three `layout = .empty` writes in an earlier revision
+/// of this file were doing, spreading layout bookkeeping through every editing
+/// path. Knowing less is what keeps the editing layer testable against CoreKit
+/// alone, and CI enforces the boundary.
 public struct EditorState: Hashable, Sendable {
 
     public var document: DocumentModel
     public var selection: TextRange
     public var undoStack: UndoStack
-    public var layout: LayoutSnapshot
 
     /// Which revisions are currently visible. Changing this re-lays out the
     /// document, because the final text and the marked-up text have different
@@ -44,7 +46,6 @@ public struct EditorState: Hashable, Sendable {
         document: DocumentModel,
         selection: TextRange? = nil,
         undoStack: UndoStack = UndoStack(),
-        layout: LayoutSnapshot = .empty,
         markup: RevisionMarkup = .allMarkup,
         authorName: String = "",
         trackChanges: Bool = false,
@@ -52,7 +53,6 @@ public struct EditorState: Hashable, Sendable {
     ) {
         self.document = document
         self.undoStack = undoStack
-        self.layout = layout
         self.markup = markup
         self.authorName = authorName
         self.trackChanges = trackChanges
@@ -111,9 +111,6 @@ public struct EditorState: Hashable, Sendable {
             coalescingKey: coalescingKey,
             timestamp: timestamp
         )
-        // The layout is now stale. Clearing rather than re-laying out keeps the
-        // editor free of a LayoutKit dependency; the controller re-lays out.
-        layout = .empty
         return mutation
     }
 
@@ -402,7 +399,6 @@ public struct EditorState: Hashable, Sendable {
         let inverse = step.undo.applied(to: &document)
         step.redo = inverse
         undoStack.pushRedo(step)
-        layout = .empty
         restoreSelectionAfterUndo()
     }
 
@@ -411,7 +407,6 @@ public struct EditorState: Hashable, Sendable {
         let inverse = step.redo.applied(to: &document)
         step.undo = inverse
         undoStack.pushUndo(step)
-        layout = .empty
         restoreSelectionAfterUndo()
     }
 
