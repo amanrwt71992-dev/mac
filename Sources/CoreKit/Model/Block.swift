@@ -435,18 +435,32 @@ public struct TableLook: Hashable, Sendable {
 }
 
 public struct TableFloatingPosition: Hashable, Sendable {
+
+    /// `w:tblpPr/@w:vertAnchor` and `@w:horzAnchor`.
+    ///
+    /// Not `AnchorPlacement.RelativeFrom`, which is DrawingML's
+    /// `wp:positionH/@relativeFrom` and admits column, paragraph, character and
+    /// line. A floating table's anchors accept only these three values, so
+    /// reusing the drawing enum would let the model express states OOXML cannot,
+    /// and leave the writer to guess what to emit for them.
+    public enum Anchor: String, Hashable, Sendable {
+        case text
+        case margin
+        case page
+    }
+
     public var leftFromText: Twip
     public var rightFromText: Twip
-    public var verticalAnchor: AnchorPlacement.RelativeFrom
-    public var horizontalAnchor: AnchorPlacement.RelativeFrom
+    public var verticalAnchor: Anchor
+    public var horizontalAnchor: Anchor
     public var verticalOffset: Twip
     public var horizontalOffset: Twip
 
     public init(
         leftFromText: Twip = Twip(180),
         rightFromText: Twip = Twip(180),
-        verticalAnchor: AnchorPlacement.RelativeFrom = .text,
-        horizontalAnchor: AnchorPlacement.RelativeFrom = .text,
+        verticalAnchor: Anchor = .text,
+        horizontalAnchor: Anchor = .text,
         verticalOffset: Twip = .zero,
         horizontalOffset: Twip = .zero
     ) {

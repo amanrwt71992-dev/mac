@@ -278,12 +278,25 @@ jobs:
         run: |
           set -uo pipefail
           strip() { sed -e $'s/\x1b\\[[0-9;]*m//g' "$1"; }
+          escape() { sed -e 's/%/%25/g' -e 's/\r/%0D/g'; }
+          # One consolidated annotation first, then per-line ones.
+          #
+          # GitHub caps and dedupes individual annotations, and a run that shows
+          # three of eight diagnostics costs a whole CI round to rediscover the
+          # other five. The consolidated line joins every diagnostic into a
+          # single message so nothing is lost to the cap.
           annotate() {
-            strip "$1" | grep -E "error:" | head -25 | while IFS= read -r line; do
-              printf '::error title=%s::%s\n' "$2" "$(printf '%s' "$line" | sed -e 's/%/%25/g' -e 's/\r/%0D/g')"
+            local log="$1" title="$2" summary="$3" joined
+            joined=$(strip "$log" | grep -E "error:|failed \(" | head -30 | awk '{printf "%s ;; ", $0}' | escape)
+            if [ -n "$joined" ]; then
+              printf '::error title=%s::%s\n' "$title" "$summary ;; $joined"
+            else
+              joined=$(strip "$log" | tail -20 | awk '{printf "%s ;; ", $0}' | escape)
+              printf '::error title=%s::%s ;; no error lines matched, tail follows ;; %s\n' "$title" "$summary" "$joined"
+            fi
+            strip "$log" | grep -E "error:" | head -8 | while IFS= read -r line; do
+              printf '::error title=%s::%s\n' "$title" "$(printf '%s' "$line" | escape)"
             done
-            total=$(strip "$1" | grep -cE "error:" || true)
-            echo "::error title=$2::$3 ($total error lines in $1)"
           }
           set +e
           swift build --build-tests 2>&1 | tee build.log
@@ -306,17 +319,22 @@ jobs:
         run: |
           set -uo pipefail
           strip() { sed -e $'s/\x1b\\[[0-9;]*m//g' "$1"; }
+          escape() { sed -e 's/%/%25/g' -e 's/\r/%0D/g'; }
           set +e
           swift test --parallel 2>&1 | tee test.log
           status=${PIPESTATUS[0]}
           set -e
           if [ "$status" -ne 0 ]; then
-            # XCTest failures print as `file:line: error: ...`, which is the same
-            # shape as a compiler diagnostic, so one grep serves both.
-            strip test.log | grep -E "error:|failed \(" | head -25 | while IFS= read -r line; do
-              printf '::error title=swift-test::%s\n' "$(printf '%s' "$line" | sed -e 's/%/%25/g' -e 's/\r/%0D/g')"
+            # XCTest failures print as `file:line: error: ...`, the same shape as
+            # a compiler diagnostic, so one grep serves both.
+            joined=$(strip test.log | grep -E "error:|XCTAssert|failed \(" | head -30 | awk '{printf "%s ;; ", $0}' | escape)
+            if [ -z "$joined" ]; then
+              joined=$(strip test.log | tail -20 | awk '{printf "%s ;; ", $0}' | escape)
+            fi
+            printf '::error title=swift-test::tests failed with status %s ;; %s\n' "$status" "$joined"
+            strip test.log | grep -E "error:" | head -8 | while IFS= read -r line; do
+              printf '::error title=swift-test::%s\n' "$(printf '%s' "$line" | escape)"
             done
-            echo "::error title=swift-test::tests failed with status $status"
             exit "$status"
           fi
 
@@ -410,12 +428,25 @@ jobs:
         run: |
           set -uo pipefail
           strip() { sed -e $'s/\x1b\\[[0-9;]*m//g' "$1"; }
+          escape() { sed -e 's/%/%25/g' -e 's/\r/%0D/g'; }
+          # One consolidated annotation first, then per-line ones.
+          #
+          # GitHub caps and dedupes individual annotations, and a run that shows
+          # three of eight diagnostics costs a whole CI round to rediscover the
+          # other five. The consolidated line joins every diagnostic into a
+          # single message so nothing is lost to the cap.
           annotate() {
-            strip "$1" | grep -E "error:" | head -25 | while IFS= read -r line; do
-              printf '::error title=%s::%s\n' "$2" "$(printf '%s' "$line" | sed -e 's/%/%25/g' -e 's/\r/%0D/g')"
+            local log="$1" title="$2" summary="$3" joined
+            joined=$(strip "$log" | grep -E "error:|failed \(" | head -30 | awk '{printf "%s ;; ", $0}' | escape)
+            if [ -n "$joined" ]; then
+              printf '::error title=%s::%s\n' "$title" "$summary ;; $joined"
+            else
+              joined=$(strip "$log" | tail -20 | awk '{printf "%s ;; ", $0}' | escape)
+              printf '::error title=%s::%s ;; no error lines matched, tail follows ;; %s\n' "$title" "$summary" "$joined"
+            fi
+            strip "$log" | grep -E "error:" | head -8 | while IFS= read -r line; do
+              printf '::error title=%s::%s\n' "$title" "$(printf '%s' "$line" | escape)"
             done
-            total=$(strip "$1" | grep -cE "error:" || true)
-            echo "::error title=$2::$3 ($total error lines in $1)"
           }
           set +e
           swift build --build-tests 2>&1 | tee build.log
@@ -438,17 +469,22 @@ jobs:
         run: |
           set -uo pipefail
           strip() { sed -e $'s/\x1b\\[[0-9;]*m//g' "$1"; }
+          escape() { sed -e 's/%/%25/g' -e 's/\r/%0D/g'; }
           set +e
           swift test --parallel 2>&1 | tee test.log
           status=${PIPESTATUS[0]}
           set -e
           if [ "$status" -ne 0 ]; then
-            # XCTest failures print as `file:line: error: ...`, which is the same
-            # shape as a compiler diagnostic, so one grep serves both.
-            strip test.log | grep -E "error:|failed \(" | head -25 | while IFS= read -r line; do
-              printf '::error title=swift-test::%s\n' "$(printf '%s' "$line" | sed -e 's/%/%25/g' -e 's/\r/%0D/g')"
+            # XCTest failures print as `file:line: error: ...`, the same shape as
+            # a compiler diagnostic, so one grep serves both.
+            joined=$(strip test.log | grep -E "error:|XCTAssert|failed \(" | head -30 | awk '{printf "%s ;; ", $0}' | escape)
+            if [ -z "$joined" ]; then
+              joined=$(strip test.log | tail -20 | awk '{printf "%s ;; ", $0}' | escape)
+            fi
+            printf '::error title=swift-test::tests failed with status %s ;; %s\n' "$status" "$joined"
+            strip test.log | grep -E "error:" | head -8 | while IFS= read -r line; do
+              printf '::error title=swift-test::%s\n' "$(printf '%s' "$line" | escape)"
             done
-            echo "::error title=swift-test::tests failed with status $status"
             exit "$status"
           fi
 

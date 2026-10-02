@@ -14,7 +14,21 @@ public enum DocumentColor: Hashable, Sendable {
 
     /// A named theme slot plus optional tint/shade — `a:schemeClr val="accent1"`.
     /// Preserved symbolically so theme changes propagate.
-    case theme(ThemeColorSlot, luminanceModulation: LuminanceModulation?)
+    ///
+    /// Constructed through the `theme(_:luminanceModulation:)` factory below
+    /// rather than directly, because Swift enum cases cannot carry default
+    /// payload values and an unmodulated theme reference is by far the common
+    /// case. Nine call sites each spelling out `luminanceModulation: nil` is nine
+    /// opportunities to write something else by accident.
+    case themeColor(ThemeColorSlot, luminanceModulation: LuminanceModulation?)
+
+    /// A theme slot, optionally tinted or shaded.
+    public static func theme(
+        _ slot: ThemeColorSlot,
+        luminanceModulation: LuminanceModulation? = nil
+    ) -> DocumentColor {
+        return .themeColor(slot, luminanceModulation: luminanceModulation)
+    }
 
     /// One of the sixteen named colours `w:highlight` accepts. Distinct from
     /// `srgb` because OOXML stores it as a keyword, not a triplet.
@@ -33,7 +47,7 @@ public enum DocumentColor: Hashable, Sendable {
         switch self {
         case .srgb, .highlight:
             return true
-        case .theme, .automatic, .inherit:
+        case .themeColor, .automatic, .inherit:
             return false
         }
     }
@@ -46,7 +60,7 @@ public enum DocumentColor: Hashable, Sendable {
         switch self {
         case .srgb(let r, let g, let b):
             return RGB(red: r, green: g, blue: b)
-        case .theme(let slot, let modulation):
+        case .themeColor(let slot, let modulation):
             let base = theme.color(for: slot)
             guard let modulation else { return base }
             return modulation.apply(to: base)
