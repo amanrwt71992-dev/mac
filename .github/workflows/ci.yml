@@ -249,13 +249,24 @@ jobs:
     timeout-minutes: 25
     container:
       image: swift:6.2
+    # Forced explicitly. In a container job GitHub falls back to `sh` when it
+    # cannot find bash, and `set -o pipefail` under dash exits 2 without running
+    # a single line — which is exactly the silent failure this job produced for
+    # three consecutive runs while the same script worked on macOS.
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
 
       - name: Toolchain
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE" || true
+          echo "shell: $0"
+          bash --version | head -1
           swift --version
+          # Proves the reporting path works before the build depends on it.
+          echo "::notice title=toolchain::bash $(bash -c 'echo $BASH_VERSION'), swift present" 
 
       # `-warnings-as-errors` is deliberately not on yet. With no local Swift
       # toolchain, CI is the compiler, and a warning turned error hides every

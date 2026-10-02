@@ -142,7 +142,45 @@ public struct DocumentModel: Hashable, Sendable {
         )
     }
 
-    // MARK: - Body access
+    /// Replaces a paragraph anywhere inside a block list, recursing into tables and
+/// content controls.
+///
+/// Free function, not a `DocumentModel` method: see `replaceParagraph(_:)`.
+/// `fileprivate` because the only caller is that method.
+fileprivate func replaceParagraphIn(_ blocks: inout [Block], with replacement: Paragraph) -> Bool {
+    for index in blocks.indices {
+        switch blocks[index] {
+        case .paragraph(let paragraph):
+            if paragraph.id == replacement.id {
+                blocks[index] = .paragraph(replacement)
+                return true
+            }
+        case .table(var table):
+            var changed = false
+            for rowIndex in table.rows.indices {
+                for cellIndex in table.rows[rowIndex].cells.indices {
+                    if replaceParagraphIn(&table.rows[rowIndex].cells[cellIndex].blocks, with: replacement) {
+                        changed = true
+                    }
+                }
+            }
+            if changed {
+                blocks[index] = .table(table)
+                return true
+            }
+        case .contentControl(var control):
+            if replaceParagraphIn(&control.blocks, with: replacement) {
+                blocks[index] = .contentControl(control)
+                return true
+            }
+        case .math, .preserved:
+            continue
+        }
+    }
+    return false
+}
+
+// MARK: - Body access
 
     /// Every top-level block in the body, across all sections, in order.
     public var blocks: [Block] {
@@ -172,49 +210,19 @@ public struct DocumentModel: Hashable, Sendable {
     /// table cell or a footnote.
     @discardableResult
     public mutating func replaceParagraph(_ replacement: Paragraph) -> Bool {
+        // The recursion lives in a free function, not a method. Calling a
+        // mutating method on `self` while also handing it `&self.sections[i]`
+        // overlaps two exclusive accesses to the same storage, which Swift
+        // rejects at compile time — and rightly, because at runtime it would be
+        // a copy-on-write hazard rather than a crash.
         for index in sections.indices {
-            if replaceParagraph(replacement, in: &sections[index].blocks) {
-                return true
-            }
+            if replaceParagraphIn(&sections[index].blocks, with: replacement) { return true }
         }
         for index in footnotes.notes.indices {
-            if replaceParagraph(replacement, in: &footnotes.notes[index].blocks) { return true }
+            if replaceParagraphIn(&footnotes.notes[index].blocks, with: replacement) { return true }
         }
         for index in endnotes.notes.indices {
-            if replaceParagraph(replacement, in: &endnotes.notes[index].blocks) { return true }
-        }
-        return false
-    }
-
-    private mutating func replaceParagraph(_ replacement: Paragraph, in blocks: inout [Block]) -> Bool {
-        for index in blocks.indices {
-            switch blocks[index] {
-            case .paragraph(let paragraph):
-                if paragraph.id == replacement.id {
-                    blocks[index] = .paragraph(replacement)
-                    return true
-                }
-            case .table(var table):
-                var changed = false
-                for rowIndex in table.rows.indices {
-                    for cellIndex in table.rows[rowIndex].cells.indices {
-                        if replaceParagraph(replacement, in: &table.rows[rowIndex].cells[cellIndex].blocks) {
-                            changed = true
-                        }
-                    }
-                }
-                if changed {
-                    blocks[index] = .table(table)
-                    return true
-                }
-            case .contentControl(var control):
-                if replaceParagraph(replacement, in: &control.blocks) {
-                    blocks[index] = .contentControl(control)
-                    return true
-                }
-            case .math, .preserved:
-                continue
-            }
+            if replaceParagraphIn(&endnotes.notes[index].blocks, with: replacement) { return true }
         }
         return false
     }
