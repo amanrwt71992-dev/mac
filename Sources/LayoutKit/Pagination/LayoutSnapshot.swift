@@ -149,7 +149,11 @@ public struct LayoutLine: Hashable, Sendable {
         baselineOffset: Double = 0,
         ascent: Double = 0,
         descent: Double = 0,
-        paragraphID: NodeID = 0,
+        // Spelled out: `NodeID` wraps a UInt64 and is deliberately *not*
+        // ExpressibleByIntegerLiteral, so a bare 0 will not convert. Letting
+        // literals in would defeat the point of the wrapper — a node id and a
+        // count would become interchangeable at every call site.
+        paragraphID: NodeID = NodeID(0),
         characterRange: Range<Int> = 0..<0,
         isFirstLineOfParagraph: Bool = true,
         isLastLineOfParagraph: Bool = true,

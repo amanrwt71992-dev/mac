@@ -405,9 +405,11 @@ final class ModelTests: XCTestCase {
             eastAsia: "MS Gothic",
             complexScript: "Arial Unicode MS"
         )
-        guard let latin = Unicode.Scalar("A"), let cjk = Unicode.Scalar(0x4E2D), let arabic = Unicode.Scalar(0x0627) else {
-            return XCTFail("test scalars must be valid")
-        }
+        // Non-failable: `Unicode.Scalar(UInt32)` cannot fail, so a `guard let`
+        // here is a compile error rather than a safety check.
+        let latin = Unicode.Scalar(0x41)     // 'A'
+        let cjk = Unicode.Scalar(0x4E2D)     // '中'
+        let arabic = Unicode.Scalar(0x0627)  // 'ا'
         XCTAssertEqual(reference.family(for: latin), "Calibri")
         XCTAssertEqual(reference.family(for: cjk), "MS Gothic", "CJK text uses the eastAsia slot")
         XCTAssertEqual(reference.family(for: arabic), "Arial Unicode MS", "complex script uses the cs slot")
