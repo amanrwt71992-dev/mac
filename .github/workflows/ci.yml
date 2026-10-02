@@ -117,53 +117,90 @@ jobs:
           test -f "$policy" || { echo "::error::$policy is missing"; exit 1; }
           python3 - "$policy" <<'PY'
           import re, sys
+
           source = open(sys.argv[1], encoding="utf-8").read()
 
-          def names(after):
-              match = re.search(re.escape(after) + r"\s*:\s*\[(.*?)\]", source, re.S)
-              assert match, "could not find " + after
-              return set(re.findall(r'"([^"]+)"', match.group(1)))
+          def literals(after):
+              # Find `static let <after> ... = [` and take the literals up to its
+              # matching `]`. A lazy `(.*?)\]` regex stops at the first bracket,
+              # which for `: Set<String> = [` is inside the type annotation and
+              # yields nothing at all.
+              match = re.search(r"static\s+let\s+" + re.escape(after) + r"\b[^=]*=\s*\[", source)
+              assert match, "could not find the declaration of " + after
+              start = match.end() - 1
+              depth = 0
+              for index in range(start, len(source)):
+                  if source[index] == "[":
+                      depth += 1
+                  elif source[index] == "]":
+                      depth -= 1
+                      if depth == 0:
+                          return re.findall(r'"([^"]+)"', source[start:index + 1])
+              raise AssertionError("unbalanced brackets in " + after)
 
-          bundled = names("bundled")
-          forbidden = names("neverBundle")
+          # metricCompatible alternates key/value, so read it as pairs.
+          pairs = literals("metricCompatible")
+          assert len(pairs) % 2 == 0, "metricCompatible must hold key/value pairs"
+          substitutions = dict(zip(pairs[0::2], pairs[1::2]))
+
+          bundled = set(literals("bundled"))
+          forbidden = set(literals("neverBundle"))
+
           overlap = bundled & forbidden
           assert not overlap, "on both the bundled and the forbidden list: %s" % sorted(overlap)
-          assert bundled, "the bundled set is empty — nothing would render"
-          for family in ("Carlito", "Caladea"):
-              assert family in bundled, "%s must be bundled so Word documents do not reflow" % family
-          for family in ("Calibri", "Cambria", "Times New Roman", "Arial"):
+          assert bundled, "the bundled set is empty - nothing would render"
+
+          for family in ("Carlito", "Caladea", "Liberation Serif"):
+              assert family in bundled, "%s must be bundled or Word documents would reflow" % family
+          for family in ("Calibri", "Cambria", "Times New Roman", "Arial", "Consolas", "Segoe UI"):
               assert family in forbidden, "%s must never be redistributed" % family
-          print("bundled: %d families, forbidden: %d families, no overlap" % (len(bundled), len(forbidden)))
+
+          # A substitute that is not itself shippable is a licence problem
+          # wearing a fallback's clothes.
+          unshippable = sorted(set(substitutions.values()) - bundled)
+          assert not unshippable, "substitutes that are not bundled: %s" % unshippable
+
+          # Word's own default faces must have substitutes, or every document it
+          # writes reflows against us.
+          unmapped = sorted({"Calibri", "Cambria"} - set(substitutions))
+          assert not unmapped, "Word's default faces need substitutes: %s" % unmapped
+
+          print("bundled %d families, forbidden %d, substitutions %d, no overlap" % (
+              len(bundled), len(forbidden), len(substitutions)))
           PY
 
       - name: Dependency licences are on the allowlist
-        # M0 has no dependencies. When Package.resolved appears, every entry must
-        # carry a license from docs/06-LEGAL-AND-IP.md, and GPL family code must
-        # never be linked into the app binary.
+        # M0 has no dependencies, so what this enforces today is the invariant
+        # that will matter the day there are some: every pinned package must be
+        # attributed in NOTICE. A grep for forbidden licence *strings* would be
+        # useless here — NOTICE states the prohibition in prose, so the words
+        # GPL and AGPL appear in the very sentence that bans them.
         run: |
           set -euo pipefail
-          allowed='MIT|Apache-2.0|BSD-2-Clause|BSD-3-Clause|ISC|OFL-1.1|Unlicense|CC0-1.0'
-          forbidden='GPL|LGPL|AGPL|SSPL|BUSL|Elastic'
+          allowed='MIT | Apache-2.0 | BSD-2-Clause | BSD-3-Clause | ISC | OFL-1.1 | Unlicense | CC0-1.0'
+          echo "permitted licence families: $allowed"
           if grep -qE '\.package\(' Package.swift; then
-            echo "Package.swift declares dependencies; Package.resolved must be committed and audited."
+            echo "Package.swift declares dependencies; Package.resolved must be committed."
             test -f Package.resolved || { echo "::error::Package.resolved is missing"; exit 1; }
+          else
+            echo "no external Swift package dependencies declared"
           fi
           if [ -f Package.resolved ]; then
             python3 - <<'PY'
-          import json
-          pins = json.load(open("Package.resolved"))
-          for pin in pins.get("pins", []):
-              print("dependency:", pin["identity"], "- license audit required, see NOTICE")
+          import json, sys
+          pins = json.load(open("Package.resolved")).get("pins", [])
+          notice = open("NOTICE", encoding="utf-8").read()
+          missing = sorted(p["identity"] for p in pins if p["identity"] not in notice)
+          if missing:
+              print("::error::dependencies not attributed in NOTICE: %s" % ", ".join(missing))
+              sys.exit(1)
+          print("all %d pinned dependencies are attributed in NOTICE" % len(pins))
           PY
           fi
-          # Fail loudly if a forbidden licence string ever appears in NOTICE.
-          if grep -qE "$forbidden" NOTICE; then
-            echo "::error::NOTICE mentions a licence that may not be linked into the app binary"
-            grep -nE "$forbidden" NOTICE
-            exit 1
-          fi
-          echo "allowed licence families: $allowed"
-
+          # NOTICE must state the policy, or a future contributor has nothing to
+          # check a new dependency against.
+          grep -q "Apache License, Version 2.0" NOTICE || { echo "::error::NOTICE lost its Apache-2.0 statement"; exit 1; }
+          grep -qi "Open Font License" NOTICE || { echo "::error::NOTICE lost its font attributions"; exit 1; }
       - name: Byte-preserving save is still a stated requirement
         # A grep for a comment is a weak check, but this one is load-bearing: the
         # promise is that saving an unedited document leaves every original zip
