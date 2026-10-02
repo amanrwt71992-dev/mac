@@ -330,9 +330,18 @@ jobs:
       - name: Surface warnings
         if: always()
         run: |
-          warnings=$(grep -c "warning:" build.log || true)
-          echo "compiler warnings: $warnings"
-          grep -n "warning:" build.log | head -50 || true
+          # Emitted as annotations, not just printed: the log is unreachable from
+          # some environments and a warning is often the early form of a bug.
+          set -uo pipefail
+          strip() { sed -e $'s/\x1b\\[[0-9;]*m//g' "$1"; }
+          escape() { sed -e 's/%/%25/g' -e 's/\r/%0D/g'; }
+          if [ ! -f build.log ]; then echo "no build.log"; exit 0; fi
+          count=$(strip build.log | grep -cE "warning:" || true)
+          echo "compiler warnings: $count"
+          if [ "$count" -gt 0 ]; then
+            joined=$(strip build.log | grep -E "warning:" | head -20 | awk '{printf "%s ;; ", $0}' | escape)
+            printf '::warning title=swift-warnings::%s warning(s) ;; %s\n' "$count" "$joined"
+          fi
 
       - name: Test
         id: test
@@ -489,9 +498,18 @@ jobs:
       - name: Surface warnings
         if: always()
         run: |
-          warnings=$(grep -c "warning:" build.log || true)
-          echo "compiler warnings: $warnings"
-          grep -n "warning:" build.log | head -50 || true
+          # Emitted as annotations, not just printed: the log is unreachable from
+          # some environments and a warning is often the early form of a bug.
+          set -uo pipefail
+          strip() { sed -e $'s/\x1b\\[[0-9;]*m//g' "$1"; }
+          escape() { sed -e 's/%/%25/g' -e 's/\r/%0D/g'; }
+          if [ ! -f build.log ]; then echo "no build.log"; exit 0; fi
+          count=$(strip build.log | grep -cE "warning:" || true)
+          echo "compiler warnings: $count"
+          if [ "$count" -gt 0 ]; then
+            joined=$(strip build.log | grep -E "warning:" | head -20 | awk '{printf "%s ;; ", $0}' | escape)
+            printf '::warning title=swift-warnings::%s warning(s) ;; %s\n' "$count" "$joined"
+          fi
 
       - name: Test
         id: test

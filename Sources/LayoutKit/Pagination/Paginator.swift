@@ -377,7 +377,13 @@ private struct PaginationState {
         return copy
     }
 
-    func consume(height: Double) {
+    /// Advances the baseline cursor by a placed line's height.
+    ///
+    /// `mutating` because it moves the cursor: everything downstream — how much
+    /// room is left in the column, whether the column is empty, where the next
+    /// line goes — reads `y`, so a caller that could not commit the advance would
+    /// place every subsequent line on top of the previous one.
+    mutating func consume(height: Double) {
         y += height
     }
 
