@@ -590,6 +590,42 @@ public struct EditorState: Hashable, Sendable {
         return true
     }
 
+    /// The italic twin of `toggleBold`, including Word's rule rather than a naive
+    /// flip: if *any* character in the selection is not italic, make all of them
+    /// italic. Only when every character is already italic does the command remove
+    /// it. A naive flip would strip italic from the half of a selection that had
+    /// it, which is never what the user meant.
+    public mutating func toggleItalic(timestamp: Date) {
+        let shouldItalic = !selectionIsUniformlyItalic()
+        applyRunFormatting({ properties in
+            properties.italic = shouldItalic
+        }, timestamp: timestamp)
+    }
+
+    public func selectionIsUniformlyItalic() -> Bool {
+        guard !selection.isCollapsed else {
+            return runPropertiesAtCaret().italic == true
+        }
+        let ordered = selection.ordered(in: document)
+        guard ordered.start.paragraphID == ordered.end.paragraphID,
+              let paragraph = document.paragraph(withID: ordered.start.paragraphID) else { return false }
+        let text = paragraph.plainText(markup: markup)
+        let lower = text.index(text.startIndex, offsetBy: min(ordered.start.characterOffset, text.count))
+        let upper = text.index(text.startIndex, offsetBy: min(ordered.end.characterOffset, text.count))
+        guard lower < upper else { return false }
+
+        var consumed = 0
+        for run in paragraph.runs {
+            let length = run.content.plainText.count
+            let runStart = consumed
+            let runEnd = consumed + length
+            consumed = runEnd
+            guard runEnd > ordered.start.characterOffset, runStart < ordered.end.characterOffset else { continue }
+            if run.properties.italic != true { return false }
+        }
+        return true
+    }
+
     /// Applies a paragraph style by id.
     public mutating func applyParagraphStyle(_ styleID: String, timestamp: Date) {
         let ordered = selection.ordered(in: document)

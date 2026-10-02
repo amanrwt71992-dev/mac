@@ -173,7 +173,15 @@ public final class CoreTextMeasurer: TextMeasurer, @unchecked Sendable {
         }
     }
 
-    private func ctFont(for spec: FontSpec) -> CTFont {
+    /// Creates (or reuses) the CoreText font for a resolved spec.
+    ///
+    /// Public because the renderer must draw with the *same* face the measurer
+    /// measured with. If the two disagree — typically because a document asks for
+    /// Calibri, which we neither ship nor may bundle, and CoreText's silent
+    /// fallback differs from whatever the UI layer guessed — glyphs drift away
+    /// from the advances in the layout snapshot and the caret stops sitting where
+    /// the text is. `postScriptName(for:)` below is the safe way to ask.
+    public func ctFont(for spec: FontSpec) -> CTFont {
         let key = FontCacheKey(spec)
         lock.lock()
         if let cached = fontCache[key] {
@@ -232,6 +240,18 @@ public final class CoreTextMeasurer: TextMeasurer, @unchecked Sendable {
         fontCache[key] = font
         lock.unlock()
         return font
+    }
+
+    /// The PostScript name of the font CoreText actually resolved for a spec.
+    ///
+    /// This is the name to hand to a UI-layer font constructor. It is read back
+    /// from the created `CTFont` rather than reconstructed from the request, so
+    /// it already reflects both our substitution policy and CoreText's own
+    /// fallback for a family that is not installed. A renderer that rebuilds
+    /// "Family Bold Italic" itself gets a different face whenever the requested
+    /// family is missing, and silently lays text out at the wrong metrics.
+    public func postScriptName(for spec: FontSpec) -> String {
+        CTFontCopyPostScriptName(ctFont(for: spec)) as String
     }
 
     /// Applies `FontSubstitution`, memoising the availability probe.

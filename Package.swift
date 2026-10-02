@@ -11,16 +11,20 @@
 //      OOXMLKit           (M1) adds ZIPFoundation. Still cross-platform.
 //      IntelligenceKit    Foundation + FoundationModels behind `canImport`.
 //      LayoutKit          CoreText. macOS only; guarded so Linux still builds.
-//      EditorKit          CoreKit only. Editing, selection and undo; no layout,
-//                         no AppKit in M0 (the AppKit surface arrives in M1).
-//      GalleyApp          the executable.
+//      EditorKit          CoreKit only. Editing, selection and undo. It may not
+//                         import LayoutKit: the snapshot is derived state owned
+//                         by the controller, not by the editor.
+//      ZenithApp          the application. AppKit lives here and nowhere else.
+//      GalleyApp          the headless harness: self-test, layout report,
+//                         providers. Named for the old product name; renamed in
+//                         the same pass that renames the rest of the project.
 //
 //  Nothing may import EditorKit or GalleyApp.
 
 import PackageDescription
 
 let package = Package(
-    name: "Galley",
+    name: "Zenith",
     platforms: [
         .macOS("27.0")
     ],
@@ -30,6 +34,7 @@ let package = Package(
         .library(name: "LayoutKit", targets: ["LayoutKit"]),
         .library(name: "EditorKit", targets: ["EditorKit"]),
         .executable(name: "Galley", targets: ["GalleyApp"]),
+        .executable(name: "Zenith", targets: ["ZenithApp"]),
     ],
     targets: [
         .target(name: "CoreKit"),
@@ -56,6 +61,21 @@ let package = Package(
             name: "GalleyApp",
             dependencies: ["CoreKit", "LayoutKit", "EditorKit", "IntelligenceKit"],
             path: "Sources/GalleyApp"
+        ),
+
+        // The application. This is the only target allowed to import AppKit: it
+        // is the only one that draws anything. Everything below it stays
+        // headless, which is what keeps the layout engine testable on a machine
+        // with no window server and lets CI type-check most of the codebase in
+        // two minutes on Linux instead of three on a Mac.
+        //
+        // Every source file here is wrapped in `#if canImport(AppKit)`, so the
+        // Linux job still builds the target — it just produces an executable that
+        // says so, rather than failing to compile.
+        .executableTarget(
+            name: "ZenithApp",
+            dependencies: ["CoreKit", "LayoutKit", "EditorKit", "IntelligenceKit"],
+            path: "Sources/ZenithApp"
         ),
 
         .testTarget(

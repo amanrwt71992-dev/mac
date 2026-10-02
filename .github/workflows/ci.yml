@@ -77,6 +77,22 @@ jobs:
               fail=1
             fi
           done
+          # AppKit is allowed in exactly one target. Everything below it stays
+          # headless: that is what makes the layout engine testable on a runner
+          # with no window server, and what lets the Linux job type-check most of
+          # the codebase in two minutes instead of three on a Mac.
+          for dir in Sources/CoreKit Sources/LayoutKit Sources/IntelligenceKit Sources/EditorKit Sources/GalleyApp; do
+            if grep -rnE "^[[:space:]]*import[[:space:]]+(AppKit|SwiftUI|UIKit)" "$dir" 2>/dev/null; then
+              echo "::error::$dir must not import AppKit, SwiftUI or UIKit - only ZenithApp draws anything"
+              fail=1
+            fi
+          done
+
+          if grep -rnE "^[[:space:]]*import[[:space:]]+ZenithApp" Sources 2>/dev/null; then
+            echo "::error::nothing may import ZenithApp"
+            fail=1
+          fi
+
           if grep -rnE "^[[:space:]]*import[[:space:]]+GalleyApp" Sources 2>/dev/null; then
             echo "::error::nothing may import GalleyApp"
             fail=1
@@ -598,6 +614,80 @@ jobs:
           swift run Galley providers || true
           echo "CoreText and synthetic page/line counts are recorded for comparison."
 
+      - name: Build the application (release)
+        # A debug build proves the code compiles. Only a release build proves the
+        # artifact a user downloads is the one CI checked, so the app is built
+        # again optimised and the bundle below comes from that.
+        if: steps.build.outcome == 'success'
+        run: |
+          set +e
+          set -o pipefail
+          swift build -c release --product Zenith 2>&1 | tee release-build.log
+          status=${PIPESTATUS[0]}
+          set -e
+          echo "release build exit status: $status"
+          warnings=$(grep -cE "warning:" release-build.log || true)
+          echo "release warnings: $warnings"
+          if [ "$status" -ne 0 ]; then
+            diagnostics=$(grep -E "error:" release-build.log | head -60 | sed -e $'s/\x1b\\[[0-9;]*m//g' | paste -sd' ;; ' -)
+            echo "::error title=Release build failed::${diagnostics:-see release-build.log}"
+            exit "$status"
+          fi
+          if [ "$warnings" -gt 0 ]; then
+            grep -E "warning:" release-build.log | head -40 | sed -e $'s/\x1b\\[[0-9;]*m//g'
+            echo "::notice title=Release build warnings::$warnings warning(s)"
+          fi
+
+      - name: Headless smoke test of the built application
+        # The runner has no display, so it cannot look at the window. What it can
+        # do is run the same binary with ZENITH_HEADLESS and have that binary lay
+        # out a real document with the real CoreText measurer and assert on the
+        # result. This is the step that distinguishes "it compiles" from "it
+        # opens onto a page of text".
+        if: steps.build.outcome == 'success'
+        run: |
+          set +e
+          set -o pipefail
+          ZENITH_HEADLESS=1 .build/release/Zenith 2>&1 | tee zenith-headless.log
+          status=${PIPESTATUS[0]}
+          set -e
+          if [ "$status" -ne 0 ]; then
+            diagnostics=$(grep -E "FAIL|failure" zenith-headless.log | head -40 | paste -sd' ;; ' -)
+            echo "::error title=Application smoke test failed::${diagnostics:-exit $status}"
+            exit "$status"
+          fi
+          echo "application smoke test passed"
+
+      - name: Assemble Zenith.app
+        if: steps.build.outcome == 'success'
+        run: |
+          set -euo pipefail
+          chmod +x Tools/make-app.sh
+          Tools/make-app.sh .build/release dist 0.1.0
+
+      - name: Package for download
+        if: steps.build.outcome == 'success'
+        run: |
+          set -euo pipefail
+          cd dist
+          # ditto, not zip: `zip` drops the extended attributes and resource forks
+          # that a signed bundle carries, and the result fails signature
+          # verification on the machine that downloads it.
+          ditto -c -k --sequesterRsrc --keepParent Zenith.app Zenith-app.zip
+          shasum -a 256 Zenith-app.zip | tee Zenith-app.zip.sha256
+          ls -la
+
+      - name: Upload the application
+        if: steps.build.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Zenith-macOS-arm64
+          path: |
+            dist/Zenith-app.zip
+            dist/Zenith-app.zip.sha256
+          retention-days: 30
+          if-no-files-found: error
+
       - name: Upload logs on failure
         if: failure()
         uses: actions/upload-artifact@v4
@@ -609,4 +699,6 @@ jobs:
             selftest-coretext.log
             selftest-fixed.log
             layout.log
+            release-build.log
+            zenith-headless.log
           if-no-files-found: ignore
