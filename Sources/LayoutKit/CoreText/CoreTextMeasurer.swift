@@ -188,33 +188,33 @@ public final class CoreTextMeasurer: TextMeasurer, @unchecked Sendable {
         // breaks and changes the page count.
         let requested = resolvedFamily(for: spec.family)
 
-        var attributes: [CFString: Any] = [
+        let descriptor = CTFontDescriptorCreateWithAttributes([
             kCTFontFamilyNameAttribute: requested as CFString,
             kCTFontSizeAttribute: spec.sizePoints as CFNumber,
-        ]
+        ] as CFDictionary)
+        let base = CTFontCreateWithFontDescriptor(descriptor, CGFloat(spec.sizePoints), nil)
 
+        // Bold and italic are applied by copying the font with symbolic traits,
+        // not by putting traits into the descriptor. The descriptor route needs
+        // `kCTFontTraitsAttribute` and its inner trait-key constants, whose names
+        // the macOS 27 SDK does not expose to Swift under the spellings the
+        // documentation uses; `CTFontCreateCopyWithSymbolicTraits` has had the
+        // same four-parameter signature since 10.5.
+        //
+        // A family with no such face returns nil, and the regular face is kept
+        // rather than synthesised: CoreText's synthetic bold changes advance
+        // widths, which would move line breaks away from Word's.
         var traits = CTFontSymbolicTraits(rawValue: 0)
         if spec.bold { traits.insert(.traitBold) }
         if spec.italic { traits.insert(.traitItalic) }
-        if !traits.isEmpty {
-            // `kCTFontTraitsAttribute` holds a *dictionary* of trait keys, of
-            // which the symbolic traits are one entry — not the symbolic value
-            // directly. There is no `kCTFontSymbolicTraitAttribute`; the symbol
-            // is `kCTFontSymbolicTraitKey`, and it is a key inside that
-            // dictionary.
-            attributes[kCTFontTraitsAttribute] = [
-                kCTFontSymbolicTraitKey: NSNumber(value: traits.rawValue)
-            ] as CFDictionary
-        }
 
-        // Bold and italic go into the descriptor as attributes rather than
-        // through `CTFontDescriptorCreateCopyWithSymbolicTraits`. One descriptor
-        // built with everything in it is fewer CoreText round-trips than two, and
-        // it does not depend on an API whose imported arity has differed between
-        // SDKs. `as CFDictionary` is required: a Swift `[CFString: Any]` is not
-        // automatically bridged at an argument position typed `CFDictionary`.
-        let descriptor = CTFontDescriptorCreateWithAttributes(attributes as CFDictionary)
-        var font = CTFontCreateWithFontDescriptor(descriptor, CGFloat(spec.sizePoints), nil)
+        var font = base
+        if !traits.isEmpty,
+           let styled = CTFontCreateCopyWithSymbolicTraits(
+               base, CGFloat(spec.sizePoints), nil, traits
+           ) {
+            font = styled
+        }
 
         // `w:w` horizontal scaling is a font transform, not a size change:
         // scaling the size would also scale the vertical metrics and change the

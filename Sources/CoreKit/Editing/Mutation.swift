@@ -297,7 +297,13 @@ public struct DocumentMutation: Hashable, Sendable {
             }
         }
 
-        return DocumentMutation(operations: inverse, author: author)
+        // Reversed. The inverse of a sequence [A, B] is [B⁻¹, A⁻¹]: you undo the
+        // last thing first. Appending each inverse as it is produced gives
+        // [A⁻¹, B⁻¹], which for a single operation is indistinguishable and for
+        // two is wrong — the assistant's "insert replacement, then mark the
+        // original deleted" pair would first strip the replacement and then
+        // restore a paragraph snapshot that already contains it.
+        return DocumentMutation(operations: inverse.reversed(), author: author)
     }
 }
 
@@ -402,6 +408,11 @@ public struct UndoStack: Hashable, Sendable {
             last.undo = mergedUndo
             last.redo = mergedRedo
             last.timestamp = timestamp
+            // The key moves forward too. Leaving it at the first keystroke's
+            // offsets means the third keystroke no longer looks contiguous with
+            // the merged step, so "hello" types as three undo steps instead of
+            // one — the exact behaviour coalescing exists to prevent.
+            last.coalescingKey = key
             undoSteps[undoSteps.count - 1] = last
             return
         }

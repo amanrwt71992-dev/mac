@@ -117,33 +117,57 @@ public struct EditorState: Hashable, Sendable {
     // MARK: Typing
 
     /// Inserts text at the caret, replacing any selection.
+    ///
+    /// When something is selected, the deletion and the insertion are composed
+    /// into **one** mutation and applied once. Doing them as two steps makes
+    /// replacing a selection by typing two undo actions, and the user who presses
+    /// ⌘Z expecting their text back gets the half-state instead.
     public mutating func insertText(_ text: String, timestamp: Date) {
         guard !text.isEmpty else { return }
-        deleteSelectionIfNeeded(timestamp: timestamp, undoName: nil)
 
-        guard let caret = selection.focus.paragraphOrNil(in: document) else { return }
+        let ordered = selection.ordered(in: document)
+        // The formatting to apply is read *before* anything is deleted: it is the
+        // formatting in effect at the point the user was looking at.
         let properties = pendingRunProperties ?? runPropertiesAtCaret()
+
+        var operations: [MutationOp] = []
+        var caretParagraph = selection.focus.paragraphID
+        var caretOffset = selection.focus.characterOffset
+
+        if !selection.isCollapsed {
+            operations.append(contentsOf: operationsDeletingRange(selection, timestamp: timestamp))
+            caretParagraph = ordered.start.paragraphID
+            caretOffset = ordered.start.characterOffset
+        }
+
+        guard document.paragraph(withID: caretParagraph) != nil else { return }
         let revision = currentRevision(kind: .insertion, at: timestamp)
+        operations.append(.insertText(
+            paragraph: caretParagraph,
+            characterOffset: caretOffset,
+            text: text,
+            properties: properties,
+            revision: revision
+        ))
 
-        let mutation = DocumentMutation(
-            operations: [.insertText(
-                paragraph: caret,
-                characterOffset: selection.focus.characterOffset,
-                text: text,
-                properties: properties,
-                revision: revision
-            )],
-            author: author
-        )
+        // Replacing a selection does not coalesce with the keystrokes around it:
+        // the caret does not move contiguously, and Word treats it as its own
+        // action too.
+        let key = selection.isCollapsed ? CoalescingKey(
+            kind: .insertForward(paragraph: caretParagraph),
+            startOffset: caretOffset,
+            endOffset: caretOffset + text.count
+        ) : nil
 
-        let offset = selection.focus.characterOffset
-        apply(mutation, name: "Typing", coalescingKey: CoalescingKey(
-            kind: .insertForward(paragraph: caret),
-            startOffset: offset,
-            endOffset: offset + text.count
-        ), timestamp: timestamp)
+        apply(DocumentMutation(operations: operations, author: author),
+              name: "Typing",
+              coalescingKey: key,
+              timestamp: timestamp)
 
-        selection = TextRange(caret: TextPosition(paragraphID: caret, characterOffset: offset + text.count))
+        selection = TextRange(caret: TextPosition(
+            paragraphID: caretParagraph,
+            characterOffset: caretOffset + text.count
+        ))
     }
 
     /// The op that removes text, respecting `w:trackChanges`.
@@ -296,11 +320,13 @@ public struct EditorState: Hashable, Sendable {
     @discardableResult
     private mutating func deleteSelectionIfNeeded(timestamp: Date, undoName: String?) -> Bool {
         guard !selection.isCollapsed else { return false }
-        let mutation = mutationDeletingRange(selection, timestamp: timestamp)
-        guard !mutation.isEmpty else { return false }
+        let operations = operationsDeletingRange(selection, timestamp: timestamp)
+        guard !operations.isEmpty else { return false }
 
         let ordered = selection.ordered(in: document)
-        apply(mutation, name: undoName ?? "Delete", timestamp: timestamp)
+        apply(DocumentMutation(operations: operations, author: author),
+              name: undoName ?? "Delete",
+              timestamp: timestamp)
         selection = TextRange(caret: ordered.start)
         return true
     }
@@ -313,26 +339,26 @@ public struct EditorState: Hashable, Sendable {
     /// properties — the merged paragraph keeps the *first* one's, which is why
     /// selecting from a body paragraph into a heading and deleting leaves body
     /// formatting behind.
-    private mutating func mutationDeletingRange(_ range: TextRange, timestamp: Date) -> DocumentMutation {
+    private mutating func operationsDeletingRange(_ range: TextRange, timestamp: Date) -> [MutationOp] {
         let ordered = range.ordered(in: document)
         let start = ordered.start
         let end = ordered.end
 
         if start.paragraphID == end.paragraphID {
             let length = end.characterOffset - start.characterOffset
-            guard length > 0 else { return .empty }
-            return DocumentMutation(operations: [deletionOperation(
+            guard length > 0 else { return [] }
+            return [deletionOperation(
                 paragraph: start.paragraphID,
                 characterOffset: start.characterOffset,
                 length: length,
                 timestamp: timestamp
-            )], author: author)
+            )]
         }
 
         let ordering = ParagraphOrdering(document: document)
         let startIndex = ordering.index(of: start.paragraphID)
         let endIndex = ordering.index(of: end.paragraphID)
-        guard startIndex < endIndex else { return .empty }
+        guard startIndex < endIndex else { return [] }
         let all = document.paragraphIDsInOrder
 
         // With tracking on, Word marks the text deleted and marks the paragraph
@@ -368,11 +394,11 @@ public struct EditorState: Hashable, Sendable {
                     timestamp: timestamp
                 ))
             }
-            return DocumentMutation(operations: operations, author: author)
+            return operations
         }
 
         guard var startParagraph = document.paragraph(withID: start.paragraphID),
-              var endParagraph = document.paragraph(withID: end.paragraphID) else { return .empty }
+              var endParagraph = document.paragraph(withID: end.paragraphID) else { return [] }
 
         startParagraph.deleteText(
             atCharacterOffset: start.characterOffset,
@@ -386,10 +412,10 @@ public struct EditorState: Hashable, Sendable {
         var removed = Array(all[(startIndex + 1)..<endIndex])
         removed.append(end.paragraphID)
 
-        return DocumentMutation(operations: [
+        return [
             .replaceParagraph(startParagraph),
             .removeBlocks(ids: removed),
-        ], author: author)
+        ]
     }
 
     // MARK: Undo and redo

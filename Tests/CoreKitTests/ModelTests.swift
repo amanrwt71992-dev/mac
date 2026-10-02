@@ -42,10 +42,15 @@ final class ModelTests: XCTestCase {
         for section in document.sections {
             ids.append(section.id)
             for block in section.blocks {
-                ids.append(block.id)
-                guard let paragraph = block.paragraph else { continue }
-                ids.append(paragraph.id)
-                ids.append(contentsOf: paragraph.runIDs)
+                // `block.id` *is* the paragraph's id for a `.paragraph` block, so
+                // appending both would report a duplicate that is really the same
+                // node seen twice.
+                if let paragraph = block.paragraph {
+                    ids.append(paragraph.id)
+                    ids.append(contentsOf: paragraph.runIDs)
+                } else {
+                    ids.append(block.id)
+                }
             }
         }
         XCTAssertEqual(Set(ids).count, ids.count, "a duplicate node id corrupts every edit that targets one")

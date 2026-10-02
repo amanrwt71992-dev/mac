@@ -122,10 +122,14 @@ struct SelfTest {
             for section in document.sections {
                 ids.append(section.id)
                 for block in section.blocks {
-                    ids.append(block.id)
-                    guard let paragraph = block.paragraph else { continue }
-                    ids.append(paragraph.id)
-                    ids.append(contentsOf: paragraph.runs.map { $0.id })
+                    // `block.id` is the paragraph's own id for a `.paragraph`
+                    // block; counting both would report a false duplicate.
+                    if let paragraph = block.paragraph {
+                        ids.append(paragraph.id)
+                        ids.append(contentsOf: paragraph.runs.map { $0.id })
+                    } else {
+                        ids.append(block.id)
+                    }
                 }
             }
             try expectEqual(Set(ids).count, ids.count, "every node in the tree has a distinct id")

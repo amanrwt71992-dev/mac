@@ -99,6 +99,7 @@ public struct Paginator: Sendable {
 
         state.flushPage()
         state.renumberPages()
+        state.indexParagraphs()
 
         return LayoutSnapshot(
             pages: state.pages,
@@ -127,17 +128,21 @@ public struct Paginator: Sendable {
             return
         }
 
-        if state.firstPageOfParagraph[paragraph.paragraphID] == nil {
-            state.firstPageOfParagraph[paragraph.paragraphID] = state.currentPageIndex
-        }
+        // The gap above the paragraph is consumed *before* its first line is
+        // placed. Adding it afterwards — as `consume` used to — draws the line at
+        // the previous paragraph's baseline and leaves the gap below it. The
+        // total advance is the same either way, which is why this survived a
+        // single-paragraph fixture and only shows up once two paragraphs meet.
+        state.consume(height: leadingSpace)
 
         var chunk = state.makeChunk(of: paragraph, spaceBefore: leadingSpace)
         var placed = 0
-        var isFirstChunk = true
 
         while placed < lines.count {
             let remaining = lines.count - placed
-            let available = state.remainingHeightInColumn - (isFirstChunk && placed == 0 ? leadingSpace : 0)
+            // `leadingSpace` is already consumed, so the remaining height is the
+            // space this chunk actually has.
+            let available = state.remainingHeightInColumn
             let fitting = Self.countLines(lines[placed...], thatFitIn: available)
 
             var limit = fitting
@@ -179,9 +184,8 @@ public struct Paginator: Sendable {
             if let next = nextParagraph, paragraph.keepWithNext, placed == 0 {
                 let selfHeight = lines.reduce(0.0) { $0 + $1.frame.height }
                 let nextNeeds = next.spaceBefore + (next.lines.first?.frame.height ?? 0)
-                let fitsAlone = leadingSpace + selfHeight <= state.textAreaRect.height + Self.slack
-                let fitsTogether = leadingSpace + selfHeight + paragraph.spaceAfter + nextNeeds
-                    <= available + Self.slack
+                let fitsAlone = selfHeight <= state.textAreaRect.height + Self.slack
+                let fitsTogether = selfHeight + paragraph.spaceAfter + nextNeeds <= available + Self.slack
                 if fitsAlone, !fitsTogether, !state.columnIsEmpty {
                     state.advanceColumn()
                     continue
@@ -215,7 +219,6 @@ public struct Paginator: Sendable {
                     if !chunk.lines.isEmpty {
                         state.append(chunk: chunk, isFinal: false)
                         chunk = state.makeChunk(of: paragraph, spaceBefore: 0)
-                        isFirstChunk = false
                     }
                     state.advanceColumn()
                     continue
@@ -226,23 +229,14 @@ public struct Paginator: Sendable {
             for line in slice {
                 chunk.lines.append(state.position(line: line))
             }
-            state.consume(height: slice.reduce(0.0) { $0 + $1.frame.height } + (isFirstChunk && placed == 0 ? leadingSpace : 0))
+            state.consume(height: slice.reduce(0.0) { $0 + $1.frame.height })
             placed += limit
-
-            if state.paragraphPositions[paragraph.paragraphID] == nil, let firstLine = chunk.lines.first {
-                state.paragraphPositions[paragraph.paragraphID] = ParagraphPosition(
-                    pageIndex: state.currentPageIndex,
-                    lineIndexWithinPage: state.currentParagraphCount,
-                    frame: firstLine.frame
-                )
-            }
 
             guard placed < lines.count else { break }
 
             // The paragraph continues: flush this chunk and move on.
             state.append(chunk: chunk, isFinal: false)
             chunk = state.makeChunk(of: paragraph, spaceBefore: 0)
-            isFirstChunk = false
 
             if let breakKind = lines[placed - 1].pendingBreak {
                 switch breakKind {
@@ -355,8 +349,6 @@ private struct PaginationState {
     var remainingHeightInColumn: Double { max(0, columnBottom - y) }
     var columnIsEmpty: Bool { y <= columnTop + Paginator.slack }
     var currentPageIsEmpty: Bool { page?.paragraphs.isEmpty ?? true }
-    var currentPageIndex: Int { pages.count }
-    var currentParagraphCount: Int { page?.paragraphs.count ?? 0 }
 
     var currentColumn: Rect {
         guard !columnFrames.isEmpty else { return textArea }
@@ -371,7 +363,12 @@ private struct PaginationState {
         copy.frame = Rect(x: column.x, y: y, width: column.width, height: line.frame.height)
         copy.segments = line.segments.map { segment in
             var shifted = segment
-            shifted.x = column.x + (segment.x - textArea.x)
+            // The breaker emits segment x relative to the *column*, starting at
+            // the indent — it has no idea where the column sits on the page, and
+            // must not, or a line-break cache would be invalidated by a margin
+            // change. So the shift is the column's origin plus the segment's own
+            // offset, not a difference of two page-coordinate origins.
+            shifted.x = column.x + segment.x
             return shifted
         }
         return copy
@@ -563,6 +560,31 @@ private struct PaginationState {
     }
 
     // MARK: Post-passes
+
+    /// Records which page each paragraph starts on, and where.
+    ///
+    /// A post-pass rather than a note taken during placement: while placing, a
+    /// paragraph that is about to be pushed to the next column still reports the
+    /// column it was in when the decision was made. Walking the finished pages is
+    /// exact by construction, and it is also the only place that knows the
+    /// paragraph's index within its page, which `ParagraphPosition` needs.
+    mutating func indexParagraphs() {
+        for pageIndex in pages.indices {
+            for paragraphIndex in pages[pageIndex].paragraphs.indices {
+                let laid = pages[pageIndex].paragraphs[paragraphIndex]
+                if firstPageOfParagraph[laid.paragraphID] == nil {
+                    firstPageOfParagraph[laid.paragraphID] = pageIndex
+                }
+                if paragraphPositions[laid.paragraphID] == nil, let firstLine = laid.lines.first {
+                    paragraphPositions[laid.paragraphID] = ParagraphPosition(
+                        pageIndex: pageIndex,
+                        lineIndexWithinPage: paragraphIndex,
+                        frame: firstLine.frame
+                    )
+                }
+            }
+        }
+    }
 
     /// Fills in `index` and `pageWithinSection` now that every page exists.
     mutating func renumberPages() {
