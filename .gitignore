@@ -1,0 +1,63 @@
+# Swift Package Manager
+.build/
+.build-*/
+Packages/
+Package.pins
+Package.resolved
+*.xcodeproj
+*.xcworkspace
+xcuserdata/
+DerivedData/
+.swiftpm/
+
+# Xcode
+*.pbxuser
+!default.pbxuser
+*.mode1v3
+!default.mode1v3
+*.mode2v3
+!default.mode2v3
+*.perspectivev3
+!default.perspectivev3
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+timeline.xctimeline
+playground.xcworkspace
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+.Spotlight-V100
+.Trashes
+
+# Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Local artefacts
+#
+# Test fixtures are committed (see docs/07-OPEN-QUESTIONS.md B3), but scratch
+# output is not. Perf traces in particular are large and machine-specific.
+/Tools/output/
+*.trace
+*.perfdata
+coverage/
+*.profraw
+*.profdata
+
+# Secrets. Nothing here should ever exist, and if it does it must not be
+# committed: API keys live in the Keychain, never in the repo.
+*.pem
+*.p12
+.env
+.env.*
+secrets.*

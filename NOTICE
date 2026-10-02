@@ -1,0 +1,87 @@
+Galley
+Copyright 2026 The Galley Authors
+
+This product includes software developed as part of the Galley project.
+
+Licensed under the Apache License, Version 2.0 (the "License"); you may not
+use these files except in compliance with the License. You may obtain a copy of
+the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+License for the specific language governing permissions and limitations under
+the License.
+
+================================================================================
+Third-party attributions
+================================================================================
+
+Fonts (not yet bundled; recorded here because the redistribution policy is
+decided and enforced in CI, and because the list will not change once binaries
+start shipping — see docs/06-LEGAL-AND-IP.md):
+
+  Carlito          SIL Open Font License 1.1 / Apache License 2.0
+                   Metric-compatible substitute for Calibri.
+  Caladea          SIL Open Font License 1.1
+                   Metric-compatible substitute for Cambria.
+  Liberation Sans,
+  Liberation Serif,
+  Liberation Mono  SIL Open Font License 1.1 (v2), with an exemption notice
+  Noto fonts       SIL Open Font License 1.1
+  DejaVu fonts     Bitstream Vera license (a permissive, BSD-style license)
+
+No font designed by or for Microsoft, Monotype or their licensors is bundled,
+embedded or redistributed. Where a document names such a font, Galley references
+it by name so a machine that has it licensed will use it, and substitutes a
+metric-compatible libre face only for rendering. The font name written back to
+the saved file is always the original. See Sources/CoreKit/Model/FontSubstitution.swift,
+which the CI job `checks` asserts against.
+
+================================================================================
+Interoperability
+================================================================================
+
+Galley reads and writes the Office Open XML format described in ECMA-376 and
+ISO/IEC 29500. That work relies on the Microsoft Open Specification Promise and
+on Microsoft's published Open Specifications IP notice, which permits use of the
+specifications "in order to develop implementations". No Microsoft
+specification document, schema, sample code or derived work is copied into this
+repository.
+
+The following strings appear in this repository because ECMA-376 requires them
+for interoperability, not as any assertion of rights over them:
+
+  org.openxmlformats.wordprocessingml.document
+  application/vnd.openxmlformats-officedocument.wordprocessingml.document
+  http://schemas.openxmlformats.org/wordprocessingml/2006/main
+  http://schemas.openxmlformats.org/drawingml/2006/main
+  http://schemas.openxmlformats.org/officeDocument/2006/relationships
+  http://schemas.openxmlformats.org/package/2006/relationships
+  http://schemas.openxmlformats.org/officeDocument/2006/math
+  http://schemas.openxmlformats.org/officeDocument/2006/bibliography
+
+Microsoft, Word, Microsoft Word, Excel, PowerPoint, Windows, macOS, Apple, Apple
+Intelligence, Xcode, CoreText and TextKit are trademarks of their respective
+owners. This project is not affiliated with, endorsed by, or sponsored by
+Microsoft Corporation or Apple Inc. Nothing in this repository is derived from
+Microsoft's or Apple's copyrighted expression; the OOXML element names and the
+Apple API names are facts about the respective interfaces, and are used only to
+interoperate with them.
+
+"Galley" as a product name was chosen for its independence: it is a letterpress
+term for the tray that holds set type. A Getty-owned publishing tool named
+Quire was ruled out for exactly that reason. See docs/06-LEGAL-AND-IP.md.
+
+================================================================================
+Software dependencies
+================================================================================
+
+Milestone 0 has no external Swift package dependencies. When dependencies are
+added they must carry one of the licenses permitted by docs/06-LEGAL-AND-IP.md
+(MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, OFL-1.1, Unlicense, CC0), and
+the CI job `checks` must be extended to fail on any license outside that set.
+GPL, LGPL and AGPL code may not be linked into the application binary under any
+circumstances.

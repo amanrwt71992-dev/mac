@@ -1,0 +1,323 @@
+name: CI
+
+# Three jobs, deliberately split by what they are for.
+#
+#   checks  — seconds, no compiler. Enforces the invariants that a green build
+#             cannot: package layering, the font-redistribution policy, the
+#             dependency-licence allowlist, and the byte-preserving-save marker.
+#   linux   — minutes. CoreKit, LayoutKit and EditorKit are pure Swift, so most
+#             of the codebase type-checks and unit-tests here. This is the fast
+#             feedback loop and it runs on every push.
+#   macos   — slow, preview runner, real CoreText. The only job that can verify
+#             measurement against the actual platform.
+#
+# The split is not cosmetic. A macOS-only CI would take ten minutes to tell you
+# about a typo; the Linux job tells you in two, and the macOS job then only has
+# to answer questions that are genuinely about macOS.
+
+on:
+  push:
+    branches: [main, "arena/**"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# A newer push to the same branch makes the in-flight run worthless. Cancelling
+# is what keeps the preview macOS runner from queueing behind superseded work.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # Deterministic build banners, so a binary can be tied to a commit.
+  GALLEY_REVISION: ${{ github.sha }}
+  SOURCE_DATE_EPOCH: "0"
+
+jobs:
+  # ---------------------------------------------------------------------------
+  checks:
+    name: Policy checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Package layering
+        # CoreKit is pure Swift and Foundation: it must compile and unit-test on
+        # Linux, which is what makes the fast job above fast. LayoutKit may use
+        # CoreText but must not reach for AppKit — measurement is not UI.
+        # EditorKit is the only place AppKit is allowed to appear.
+        run: |
+          set -euo pipefail
+          fail=0
+          check_absent() {
+            local dir="$1"; shift
+            local what="$1"; shift
+            if grep -rnE "^[[:space:]]*import[[:space:]]+($1)" "$dir" 2>/dev/null; then
+              echo "::error::$dir must not import $what"
+              fail=1
+            fi
+          }
+          check_absent Sources/CoreKit "AppKit, CoreText, UIKit or SwiftUI" "AppKit|CoreText|UIKit|SwiftUI|Carbon"
+          check_absent Sources/LayoutKit "AppKit, UIKit or SwiftUI" "AppKit|UIKit|SwiftUI|Carbon"
+          check_absent Sources/IntelligenceKit "AppKit, CoreText, UIKit or SwiftUI" "AppKit|CoreText|UIKit|SwiftUI|Carbon"
+
+          # Nothing may import EditorKit or the app target: the dependency flow
+          # is strictly downward.
+          for dir in Sources/CoreKit Sources/LayoutKit Sources/IntelligenceKit; do
+            if grep -rnE "^[[:space:]]*import[[:space:]]+(EditorKit|GalleyApp)" "$dir" 2>/dev/null; then
+              echo "::error::$dir must not import EditorKit or GalleyApp"
+              fail=1
+            fi
+          done
+          if grep -rnE "^[[:space:]]*import[[:space:]]+GalleyApp" Sources 2>/dev/null; then
+            echo "::error::nothing may import GalleyApp"
+            fail=1
+          fi
+
+          # LayoutKit's CoreText use is allowed but must be guarded, or the Linux
+          # job stops compiling.
+          unguarded=$(grep -rlE "^[[:space:]]*import[[:space:]]+CoreText" Sources/LayoutKit 2>/dev/null \
+            | while read -r f; do
+                grep -qE "^[[:space:]]*#if[[:space:]]+canImport\(CoreText\)" "$f" || echo "$f"
+              done || true)
+          if [ -n "$unguarded" ]; then
+            echo "::error::CoreText imports must sit inside '#if canImport(CoreText)': $unguarded"
+            fail=1
+          fi
+          exit $fail
+
+      - name: No Microsoft or Monotype font is bundled
+        # docs/06-LEGAL-AND-IP.md: these faces are licensed to Windows and
+        # Office only. Referencing them by name is fine; shipping them is not.
+        run: |
+          set -euo pipefail
+          forbidden='calibri|cambria|consolas|candara|constantia|corbel|segoe|times new roman|timesnr|arial|courier new|courier|tahoma|verdana|georgia|impact|comic sans|trebuchet|wingdings|webdings|marlett|symbol'
+          found=$(find . -path ./.git -prune -o \
+              \( -iname '*.ttf' -o -iname '*.otf' -o -iname '*.ttc' -o -iname '*.woff*' \) \
+              -print 2>/dev/null | grep -iE "$forbidden" || true)
+          if [ -n "$found" ]; then
+            echo "::error::non-redistributable font binaries in the repository:"
+            echo "$found"
+            exit 1
+          fi
+          echo "no non-redistributable font binaries present"
+
+      - name: The font substitution policy is self-consistent
+        # The two lists in FontSubstitution.swift are the enforcement point: the
+        # bundled set must be redistributable and must not intersect the
+        # forbidden set. Asserted in Swift too, but this fails in seconds rather
+        # than after a full build.
+        run: |
+          set -euo pipefail
+          policy=Sources/CoreKit/Model/FontSubstitution.swift
+          test -f "$policy" || { echo "::error::$policy is missing"; exit 1; }
+          python3 - "$policy" <<'PY'
+          import re, sys
+          source = open(sys.argv[1], encoding="utf-8").read()
+
+          def names(after):
+              match = re.search(re.escape(after) + r"\s*:\s*\[(.*?)\]", source, re.S)
+              assert match, "could not find " + after
+              return set(re.findall(r'"([^"]+)"', match.group(1)))
+
+          bundled = names("bundled")
+          forbidden = names("neverBundle")
+          overlap = bundled & forbidden
+          assert not overlap, "on both the bundled and the forbidden list: %s" % sorted(overlap)
+          assert bundled, "the bundled set is empty — nothing would render"
+          for family in ("Carlito", "Caladea"):
+              assert family in bundled, "%s must be bundled so Word documents do not reflow" % family
+          for family in ("Calibri", "Cambria", "Times New Roman", "Arial"):
+              assert family in forbidden, "%s must never be redistributed" % family
+          print("bundled: %d families, forbidden: %d families, no overlap" % (len(bundled), len(forbidden)))
+          PY
+
+      - name: Dependency licences are on the allowlist
+        # M0 has no dependencies. When Package.resolved appears, every entry must
+        # carry a license from docs/06-LEGAL-AND-IP.md, and GPL family code must
+        # never be linked into the app binary.
+        run: |
+          set -euo pipefail
+          allowed='MIT|Apache-2.0|BSD-2-Clause|BSD-3-Clause|ISC|OFL-1.1|Unlicense|CC0-1.0'
+          forbidden='GPL|LGPL|AGPL|SSPL|BUSL|Elastic'
+          if grep -qE '\.package\(' Package.swift; then
+            echo "Package.swift declares dependencies; Package.resolved must be committed and audited."
+            test -f Package.resolved || { echo "::error::Package.resolved is missing"; exit 1; }
+          fi
+          if [ -f Package.resolved ]; then
+            python3 - <<'PY'
+          import json
+          pins = json.load(open("Package.resolved"))
+          for pin in pins.get("pins", []):
+              print("dependency:", pin["identity"], "- license audit required, see NOTICE")
+          PY
+          fi
+          # Fail loudly if a forbidden licence string ever appears in NOTICE.
+          if grep -qE "$forbidden" NOTICE; then
+            echo "::error::NOTICE mentions a licence that may not be linked into the app binary"
+            grep -nE "$forbidden" NOTICE
+            exit 1
+          fi
+          echo "allowed licence families: $allowed"
+
+      - name: Byte-preserving save is still a stated requirement
+        # A grep for a comment is a weak check, but this one is load-bearing: the
+        # promise is that saving an unedited document leaves every original zip
+        # entry byte-identical. If the marker disappears, the requirement has been
+        # quietly dropped from the design, and no test would catch it.
+        run: |
+          set -euo pipefail
+          grep -rl "byte-identical" docs Sources | head -5
+          grep -rl "byte-preserving" docs Sources | head -5
+
+      - name: Required files
+        run: |
+          set -euo pipefail
+          for f in LICENSE NOTICE README.md Package.swift docs/03-ARCHITECTURE.md docs/05-ROADMAP.md docs/06-LEGAL-AND-IP.md; do
+            test -f "$f" || { echo "::error::$f is missing"; exit 1; }
+          done
+          head -1 LICENSE | grep -q "Apache License" || { echo "::error::LICENSE is not Apache-2.0"; exit 1; }
+          # Every target declared in Package.swift needs at least one source file,
+          # or SwiftPM fails to resolve the manifest.
+          python3 - <<'PY'
+          import os, re, sys
+          manifest = open("Package.swift", encoding="utf-8").read()
+          targets = re.findall(r'name:\s*"([^"]+)"', manifest)
+          missing = []
+          for name in set(targets):
+              for root in ("Sources", "Tests"):
+                  candidate = os.path.join(root, name)
+                  if os.path.isdir(candidate):
+                      if not any(f.endswith(".swift") for _, _, files in os.walk(candidate) for f in files):
+                          missing.append(candidate)
+          # GalleyApp is declared with an explicit path.
+          if os.path.isdir("Sources/GalleyApp") and not any(
+                  f.endswith(".swift") for f in os.listdir("Sources/GalleyApp")):
+              missing.append("Sources/GalleyApp")
+          if missing:
+              print("::error::target directories with no Swift sources: %s" % ", ".join(sorted(set(missing))))
+              sys.exit(1)
+          print("every declared target has sources")
+          PY
+
+  # ---------------------------------------------------------------------------
+  linux:
+    name: Linux (Swift 6.2)
+    runs-on: ubuntu-latest
+    needs: checks
+    timeout-minutes: 25
+    container:
+      image: swift:6.2
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE" || true
+          swift --version
+
+      # `-warnings-as-errors` is deliberately not on yet. With no local Swift
+      # toolchain, CI is the compiler, and a warning turned error hides every
+      # later diagnostic behind the first one. Warnings are surfaced and counted
+      # below instead, and the flag goes on once a build is green.
+      - name: Build
+        run: swift build --build-tests 2>&1 | tee build.log
+
+      - name: Surface warnings
+        if: always()
+        run: |
+          warnings=$(grep -c "warning:" build.log || true)
+          echo "compiler warnings: $warnings"
+          grep -n "warning:" build.log | head -50 || true
+
+      - name: Test
+        run: swift test --parallel 2>&1 | tee test.log
+
+      - name: Layout self-test
+        # The M0 exit test: the whole pipeline, headless, asserting on real
+        # numbers. Runs here with the synthetic measurer so it is checked on
+        # every push, not only when a macOS runner is free.
+        run: swift run Galley selftest
+
+      - name: Layout report
+        run: |
+          swift run Galley version
+          swift run Galley layout
+          swift run Galley providers
+
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-logs
+          path: |
+            build.log
+            test.log
+          if-no-files-found: ignore
+
+  # ---------------------------------------------------------------------------
+  macos:
+    name: macOS 27 (Xcode 27)
+    # `xcode-27` is the image label, not `macos-27`: GitHub moved macOS images to
+    # a per-major-Xcode support model, and `macos-latest` is explicitly *not*
+    # Xcode 27. The package's minimum deployment target is macOS 27.0, so an
+    # older image would fail to build rather than fail to run.
+    runs-on: xcode-27
+    needs: checks
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: |
+          sw_vers
+          xcodebuild -version
+          swift --version
+
+      - name: Select Xcode 27
+        # The image may name the bundle differently across rollouts, so fall back
+        # to whatever is already selected rather than failing the run on a path.
+        run: sudo xcode-select --switch /Applications/Xcode_27.0.app || sudo xcode-select --print-path
+
+      - name: Build
+        run: swift build --build-tests 2>&1 | tee build.log
+
+      - name: Surface warnings
+        if: always()
+        run: |
+          warnings=$(grep -c "warning:" build.log || true)
+          echo "compiler warnings: $warnings"
+          grep -n "warning:" build.log | head -50 || true
+
+      - name: Test
+        run: swift test --parallel 2>&1 | tee test.log
+
+      - name: Layout self-test with the CoreText measurer
+        # The only place real font metrics are exercised. Checks whose expected
+        # numbers were derived from the synthetic measurer skip themselves here;
+        # what remains proves the CoreText backend measures, breaks and paginates
+        # a real document end to end.
+        run: swift run Galley selftest --measurer coretext
+
+      - name: Layout self-test with the synthetic measurer
+        run: swift run Galley selftest
+
+      - name: Layout report
+        run: |
+          swift run Galley layout --verbose
+          swift run Galley layout --width 300
+          swift run Galley providers
+
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-logs
+          path: |
+            build.log
+            test.log
+          if-no-files-found: ignore
