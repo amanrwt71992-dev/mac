@@ -188,33 +188,33 @@ public final class CoreTextMeasurer: TextMeasurer, @unchecked Sendable {
         // breaks and changes the page count.
         let requested = resolvedFamily(for: spec.family)
 
-        let descriptor = CTFontDescriptorCreateWithAttributes([
-            kCTFontFamilyNameAttribute: requested as CFString,
-            kCTFontSizeAttribute: spec.sizePoints as CFNumber,
-        ] as CFDictionary)
-        let base = CTFontCreateWithFontDescriptor(descriptor, CGFloat(spec.sizePoints), nil)
-
-        // Bold and italic are applied by copying the font with symbolic traits,
-        // not by putting traits into the descriptor. The descriptor route needs
-        // `kCTFontTraitsAttribute` and its inner trait-key constants, whose names
-        // the macOS 27 SDK does not expose to Swift under the spellings the
-        // documentation uses; `CTFontCreateCopyWithSymbolicTraits` has had the
-        // same four-parameter signature since 10.5.
+        // Bold and italic are requested by **face name** — "Carlito Bold Italic"
+        // — rather than through symbolic traits.
         //
-        // A family with no such face returns nil, and the regular face is kept
-        // rather than synthesised: CoreText's synthetic bold changes advance
-        // widths, which would move line breaks away from Word's.
-        var traits = CTFontSymbolicTraits(rawValue: 0)
-        if spec.bold { traits.insert(.traitBold) }
-        if spec.italic { traits.insert(.traitItalic) }
-
-        var font = base
-        if !traits.isEmpty,
-           let styled = CTFontCreateCopyWithSymbolicTraits(
-               base, CGFloat(spec.sizePoints), nil, traits
-           ) {
-            font = styled
+        // Both trait routes have changed shape between SDKs and neither can be
+        // relied on blindly: the descriptor route needs `kCTFontTraitsAttribute`'s
+        // inner trait-key constants, whose documented spellings the macOS 27 SDK
+        // does not export to Swift, and `CTFontCreateCopyWithSymbolicTraits`
+        // imports here with five parameters rather than the four it has had since
+        // 10.5. `CTFontCreateWithName` goes through the same lookup CoreText uses
+        // for a font's full name, takes three parameters on every SDK, and when no
+        // such face exists returns the family's closest match instead of failing —
+        // which is the behaviour we want anyway.
+        //
+        // M1 refinement: read back `CTFontGetSymbolicTraits` and, when the face
+        // does not carry what was asked for, record that this run's metrics are
+        // approximate so the fidelity matrix can report it rather than silently
+        // differing from Word.
+        var faceName = requested
+        if spec.bold && spec.italic {
+            faceName += " Bold Italic"
+        } else if spec.bold {
+            faceName += " Bold"
+        } else if spec.italic {
+            faceName += " Italic"
         }
+
+        var font = CTFontCreateWithName(faceName as CFString, CGFloat(spec.sizePoints), nil)
 
         // `w:w` horizontal scaling is a font transform, not a size change:
         // scaling the size would also scale the vertical metrics and change the
