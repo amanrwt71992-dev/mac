@@ -405,11 +405,17 @@ final class ModelTests: XCTestCase {
             eastAsia: "MS Gothic",
             complexScript: "Arial Unicode MS"
         )
-        // Non-failable: `Unicode.Scalar(UInt32)` cannot fail, so a `guard let`
-        // here is a compile error rather than a safety check.
-        let latin = Unicode.Scalar(0x41)     // 'A'
-        let cjk = Unicode.Scalar(0x4E2D)     // '中'
-        let arabic = Unicode.Scalar(0x0627)  // 'ا'
+        // Taken from `unicodeScalars.first` rather than a `Unicode.Scalar`
+        // initialiser, because the initialisers disagree about failable-ness in a
+        // way that makes any single spelling fragile: `init?(_ v: UInt32)` is
+        // failable (a UInt32 can be a surrogate or out of range), while
+        // `init(_ v: UInt8)` and the unicode-scalar-literal form are not. A
+        // `guard let` over the literal form is a compile error and a bare binding
+        // over the UInt32 form is a compile error too. This spelling is
+        // unambiguously optional and unambiguously single-scalar.
+        let latin = "A".unicodeScalars.first!
+        let cjk = "中".unicodeScalars.first!
+        let arabic = "ا".unicodeScalars.first!
         XCTAssertEqual(reference.family(for: latin), "Calibri")
         XCTAssertEqual(reference.family(for: cjk), "MS Gothic", "CJK text uses the eastAsia slot")
         XCTAssertEqual(reference.family(for: arabic), "Arial Unicode MS", "complex script uses the cs slot")

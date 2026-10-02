@@ -46,11 +46,15 @@ public final class CoreTextMeasurer: TextMeasurer, @unchecked Sendable {
 
         for character in text {
             let clusterLength = String(character).utf16.count
-            var subClusterOffset: Double = 0
+            // CGFloat, not Double: CoreText takes this as
+            // `UnsafeMutablePointer<CGFloat>?`, and pointers are invariant, so the
+            // CGFloat/Double implicit conversion that works everywhere else in
+            // this file does not apply here.
+            var subClusterOffset = CGFloat(0)
             let start = CTLineGetOffsetForStringIndex(line, CFIndex(utf16Offset), &subClusterOffset)
             let end = CTLineGetOffsetForStringIndex(line, CFIndex(utf16Offset + clusterLength), nil)
             clusterOffsets.append(graphemeIndex)
-            advances.append(max(0, end - start))
+            advances.append(max(0, Double(end - start)))
             graphemeIndex += 1
             utf16Offset += clusterLength
         }
@@ -184,21 +188,26 @@ public final class CoreTextMeasurer: TextMeasurer, @unchecked Sendable {
         // breaks and changes the page count.
         let requested = resolvedFamily(for: spec.family)
 
-        let descriptor = CTFontDescriptorCreateWithAttributes([
+        var attributes: [CFString: Any] = [
             kCTFontFamilyNameAttribute: requested as CFString,
             kCTFontSizeAttribute: spec.sizePoints as CFNumber,
-        ])
+        ]
 
-        var font: CTFont
         var traits = CTFontSymbolicTraits(rawValue: 0)
         if spec.bold { traits.insert(.traitBold) }
         if spec.italic { traits.insert(.traitItalic) }
-
-        if !traits.isEmpty, let styled = CTFontDescriptorCreateCopyWithSymbolicTraits(descriptor, traits) {
-            font = CTFontCreateWithFontDescriptor(styled, CGFloat(spec.sizePoints), nil)
-        } else {
-            font = CTFontCreateWithFontDescriptor(descriptor, CGFloat(spec.sizePoints), nil)
+        if !traits.isEmpty {
+            attributes[kCTFontSymbolicTraitAttribute] = NSNumber(value: traits.rawValue)
         }
+
+        // Bold and italic go into the descriptor as an attribute rather than
+        // through `CTFontDescriptorCreateCopyWithSymbolicTraits`. One descriptor
+        // built with everything in it is fewer CoreText round-trips than two, and
+        // it does not depend on an API whose imported arity has differed between
+        // SDKs. `as CFDictionary` is required: a Swift `[CFString: Any]` is not
+        // automatically bridged at an argument position typed `CFDictionary`.
+        let descriptor = CTFontDescriptorCreateWithAttributes(attributes as CFDictionary)
+        var font = CTFontCreateWithFontDescriptor(descriptor, CGFloat(spec.sizePoints), nil)
 
         // `w:w` horizontal scaling is a font transform, not a size change:
         // scaling the size would also scale the vertical metrics and change the
