@@ -274,16 +274,43 @@ jobs:
       - name: Test
         run: swift test --parallel 2>&1 | tee test.log
 
+      # The M0 exit test: the whole pipeline, headless, asserting on real
+      # numbers. Runs here with the synthetic measurer so it is checked on every
+      # push, not only when a macOS runner is free.
+      #
+      # Failures are re-emitted as workflow annotations. Runner logs and artifacts
+      # are served from hosts that are not reachable from every environment, but
+      # annotations come back through api.github.com, which is. Without this the
+      # only visible signal would be a red step with no reason attached.
       - name: Layout self-test
-        # The M0 exit test: the whole pipeline, headless, asserting on real
-        # numbers. Runs here with the synthetic measurer so it is checked on
-        # every push, not only when a macOS runner is free.
-        run: swift run Galley selftest
+        run: |
+          set +e
+          swift run Galley selftest 2>&1 | tee selftest.log
+          status=${PIPESTATUS[0]}
+          set -e
+          annotate() {
+            if grep -q '^FAIL' selftest.log; then
+              grep '^FAIL' selftest.log | head -40 | while IFS= read -r line; do
+                printf '::error title=selftest::%s\n' "${line//%/%%25}"
+              done
+            else
+              echo "::error title=selftest::exited $status with no FAIL lines; last output below"
+              tail -25 selftest.log | while IFS= read -r line; do
+                printf '::error title=selftest-output::%s\n' "${line//%/%%25}"
+              done
+            fi
+            grep -E '^[0-9]+/[0-9]+ checks passed' selftest.log | while IFS= read -r line; do
+              printf '::notice title=selftest-summary::%s\n' "$line"
+            done
+          }
+          if [ "$status" -ne 0 ]; then annotate; exit "$status"; fi
+          echo "selftest passed"
 
       - name: Layout report
+        if: always()
         run: |
           swift run Galley version
-          swift run Galley layout
+          swift run Galley layout 2>&1 | tee layout.log
           swift run Galley providers
 
       - name: Upload logs on failure
@@ -294,6 +321,8 @@ jobs:
           path: |
             build.log
             test.log
+            selftest.log
+            layout.log
           if-no-files-found: ignore
 
   # ---------------------------------------------------------------------------
@@ -333,21 +362,63 @@ jobs:
       - name: Test
         run: swift test --parallel 2>&1 | tee test.log
 
+      # The only place real font metrics are exercised. Checks whose expected
+      # numbers were derived from the synthetic measurer skip themselves here;
+      # what remains proves the CoreText backend measures, breaks and paginates a
+      # real document end to end.
       - name: Layout self-test with the CoreText measurer
-        # The only place real font metrics are exercised. Checks whose expected
-        # numbers were derived from the synthetic measurer skip themselves here;
-        # what remains proves the CoreText backend measures, breaks and paginates
-        # a real document end to end.
-        run: swift run Galley selftest --measurer coretext
+        run: |
+          set +e
+          swift run Galley selftest --measurer coretext 2>&1 | tee selftest-coretext.log
+          status=${PIPESTATUS[0]}
+          set -e
+          if [ "$status" -ne 0 ]; then
+            if grep -q '^FAIL' selftest-coretext.log; then
+              grep '^FAIL' selftest-coretext.log | head -40 | while IFS= read -r line; do
+                printf '::error title=selftest-coretext::%s\n' "${line//%/%%25}"
+              done
+            else
+              echo "::error title=selftest-coretext::exited $status with no FAIL lines"
+              tail -25 selftest-coretext.log | while IFS= read -r line; do
+                printf '::error title=selftest-coretext-output::%s\n' "${line//%/%%25}"
+              done
+            fi
+            exit "$status"
+          fi
+          grep -E '^[0-9]+/[0-9]+ checks passed' selftest-coretext.log | while IFS= read -r line; do
+            printf '::notice title=selftest-coretext-summary::%s\n' "$line"
+          done
 
       - name: Layout self-test with the synthetic measurer
-        run: swift run Galley selftest
+        run: |
+          set +e
+          swift run Galley selftest 2>&1 | tee selftest-fixed.log
+          status=${PIPESTATUS[0]}
+          set -e
+          if [ "$status" -ne 0 ]; then
+            if grep -q '^FAIL' selftest-fixed.log; then
+              grep '^FAIL' selftest-fixed.log | head -40 | while IFS= read -r line; do
+                printf '::error title=selftest-fixed::%s\n' "${line//%/%%25}"
+              done
+            else
+              echo "::error title=selftest-fixed::exited $status with no FAIL lines"
+              tail -25 selftest-fixed.log | while IFS= read -r line; do
+                printf '::error title=selftest-fixed-output::%s\n' "${line//%/%%25}"
+              done
+            fi
+            exit "$status"
+          fi
+          grep -E '^[0-9]+/[0-9]+ checks passed' selftest-fixed.log | while IFS= read -r line; do
+            printf '::notice title=selftest-fixed-summary::%s\n' "$line"
+          done
 
       - name: Layout report
+        if: always()
         run: |
-          swift run Galley layout --verbose
+          swift run Galley layout 2>&1 | tee layout.log
           swift run Galley layout --width 300
           swift run Galley providers
+          echo "CoreText page/line counts are recorded in layout.log for comparison with the synthetic run."
 
       - name: Upload logs on failure
         if: failure()
@@ -357,4 +428,7 @@ jobs:
           path: |
             build.log
             test.log
+            selftest-coretext.log
+            selftest-fixed.log
+            layout.log
           if-no-files-found: ignore
