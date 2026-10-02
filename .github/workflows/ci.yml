@@ -265,20 +265,32 @@ jobs:
       # `tee`'s, which is always 0, and a failing build reports green. That cost
       # a whole CI round to notice.
       - name: Build
+        id: build
         # Compiler diagnostics are re-emitted as annotations. Runner logs live on
         # hosts that are not reachable from every environment, and SwiftPM's
         # output on Linux is not picked up by GitHub's default problem matchers,
         # so without this a failed build reports nothing but an exit code.
+        #
+        # errexit is suspended around the build on purpose: GitHub invokes
+        # `bash -e`, which would abort at the failing pipeline before a single
+        # diagnostic could be reported. That is what made the previous attempt at
+        # this silent.
         run: |
           set -uo pipefail
+          strip() { sed -e $'s/\x1b\\[[0-9;]*m//g' "$1"; }
+          annotate() {
+            strip "$1" | grep -E "error:" | head -25 | while IFS= read -r line; do
+              printf '::error title=%s::%s\n' "$2" "$(printf '%s' "$line" | sed -e 's/%/%25/g' -e 's/\r/%0D/g')"
+            done
+            total=$(strip "$1" | grep -cE "error:" || true)
+            echo "::error title=$2::$3 ($total error lines in $1)"
+          }
+          set +e
           swift build --build-tests 2>&1 | tee build.log
           status=${PIPESTATUS[0]}
+          set -e
           if [ "$status" -ne 0 ]; then
-            grep -E "error:" build.log | sed -e 's/\x1b\[[0-9;]*m//g' | head -25 \
-              | while IFS= read -r line; do
-                  printf '::error title=swift-build::%s\n' "$(printf '%s' "$line" | sed -e 's/%/%25/g' -e 's/\r/%0D/g')"
-                done
-            echo "::error title=swift-build::build failed with $status; $(grep -cE 'error:' build.log) diagnostics in build.log"
+            annotate build.log swift-build "build failed with status $status"
             exit "$status"
           fi
 
@@ -290,9 +302,23 @@ jobs:
           grep -n "warning:" build.log | head -50 || true
 
       - name: Test
+        id: test
         run: |
-          set -euo pipefail
+          set -uo pipefail
+          strip() { sed -e $'s/\x1b\\[[0-9;]*m//g' "$1"; }
+          set +e
           swift test --parallel 2>&1 | tee test.log
+          status=${PIPESTATUS[0]}
+          set -e
+          if [ "$status" -ne 0 ]; then
+            # XCTest failures print as `file:line: error: ...`, which is the same
+            # shape as a compiler diagnostic, so one grep serves both.
+            strip test.log | grep -E "error:|failed \(" | head -25 | while IFS= read -r line; do
+              printf '::error title=swift-test::%s\n' "$(printf '%s' "$line" | sed -e 's/%/%25/g' -e 's/\r/%0D/g')"
+            done
+            echo "::error title=swift-test::tests failed with status $status"
+            exit "$status"
+          fi
 
       # The M0 exit test: the whole pipeline, headless, asserting on real
       # numbers. Runs here with the synthetic measurer so it is checked on every
@@ -327,7 +353,7 @@ jobs:
           echo "selftest passed"
 
       - name: Layout report
-        if: always()
+        if: steps.build.outcome == 'success'
         run: |
           set -uo pipefail
           swift run Galley version || true
@@ -371,20 +397,32 @@ jobs:
         run: sudo xcode-select --switch /Applications/Xcode_27.0.app || sudo xcode-select --print-path
 
       - name: Build
+        id: build
         # Compiler diagnostics are re-emitted as annotations. Runner logs live on
         # hosts that are not reachable from every environment, and SwiftPM's
         # output on Linux is not picked up by GitHub's default problem matchers,
         # so without this a failed build reports nothing but an exit code.
+        #
+        # errexit is suspended around the build on purpose: GitHub invokes
+        # `bash -e`, which would abort at the failing pipeline before a single
+        # diagnostic could be reported. That is what made the previous attempt at
+        # this silent.
         run: |
           set -uo pipefail
+          strip() { sed -e $'s/\x1b\\[[0-9;]*m//g' "$1"; }
+          annotate() {
+            strip "$1" | grep -E "error:" | head -25 | while IFS= read -r line; do
+              printf '::error title=%s::%s\n' "$2" "$(printf '%s' "$line" | sed -e 's/%/%25/g' -e 's/\r/%0D/g')"
+            done
+            total=$(strip "$1" | grep -cE "error:" || true)
+            echo "::error title=$2::$3 ($total error lines in $1)"
+          }
+          set +e
           swift build --build-tests 2>&1 | tee build.log
           status=${PIPESTATUS[0]}
+          set -e
           if [ "$status" -ne 0 ]; then
-            grep -E "error:" build.log | sed -e 's/\x1b\[[0-9;]*m//g' | head -25 \
-              | while IFS= read -r line; do
-                  printf '::error title=swift-build::%s\n' "$(printf '%s' "$line" | sed -e 's/%/%25/g' -e 's/\r/%0D/g')"
-                done
-            echo "::error title=swift-build::build failed with $status; $(grep -cE 'error:' build.log) diagnostics in build.log"
+            annotate build.log swift-build "build failed with status $status"
             exit "$status"
           fi
 
@@ -396,9 +434,23 @@ jobs:
           grep -n "warning:" build.log | head -50 || true
 
       - name: Test
+        id: test
         run: |
-          set -euo pipefail
+          set -uo pipefail
+          strip() { sed -e $'s/\x1b\\[[0-9;]*m//g' "$1"; }
+          set +e
           swift test --parallel 2>&1 | tee test.log
+          status=${PIPESTATUS[0]}
+          set -e
+          if [ "$status" -ne 0 ]; then
+            # XCTest failures print as `file:line: error: ...`, which is the same
+            # shape as a compiler diagnostic, so one grep serves both.
+            strip test.log | grep -E "error:|failed \(" | head -25 | while IFS= read -r line; do
+              printf '::error title=swift-test::%s\n' "$(printf '%s' "$line" | sed -e 's/%/%25/g' -e 's/\r/%0D/g')"
+            done
+            echo "::error title=swift-test::tests failed with status $status"
+            exit "$status"
+          fi
 
       # The only place real font metrics are exercised. Checks whose expected
       # numbers were derived from the synthetic measurer skip themselves here;
@@ -451,7 +503,7 @@ jobs:
           done
 
       - name: Layout report
-        if: always()
+        if: steps.build.outcome == 'success'
         run: |
           set -uo pipefail
           swift run Galley layout --measurer coretext 2>&1 | tee layout-coretext.log
