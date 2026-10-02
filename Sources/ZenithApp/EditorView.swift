@@ -635,10 +635,17 @@ extension EditorView: NSTextInputClient {
 
     /// Plain typing.
     ///
-    /// `interpretKeyEvents` calls this single-argument `NSResponder` method when
-    /// there is no input context — which, on this SDK, is always. It is the reason
-    /// the app can be typed into at all without `NSInputContext`.
-    override func insertText(_ insertString: String) {
+    /// `interpretKeyEvents` calls this single-argument method when there is no
+    /// input context — which, on this SDK, is always. It is the reason the app can
+    /// be typed into at all without `NSInputContext`.
+    ///
+    /// `@objc` and *not* `override`. `insertText(_:)` is an optional requirement of
+    /// `NSStandardKeyBindingResponding` that `NSResponder` does not implement, so
+    /// there is nothing in the superclass to override — the compiler rejects the
+    /// keyword. `doCommand(by:)`, by contrast, *is* implemented by `NSResponder`
+    /// and does require it. Marking this `@objc` publishes the `insertText:`
+    /// selector, which is how `interpretKeyEvents` finds it at runtime.
+    @objc func insertText(_ insertString: String) {
         insert(string: insertString, replacementRange: NSRange(location: NSNotFound, length: 0))
     }
 
