@@ -894,9 +894,13 @@ extension EditorView: NSTextInputClient {
     ///
     /// The rectangle is grown before scrolling so the caret does not stop exactly
     /// flush against the edge of the visible area, which reads as clipped.
+    ///
+    /// `scrollToVisible(_:)`, not the `scrollRectToVisible(_:)` that every older
+    /// code sample uses: the macOS 27 SDK renamed it and rejects the old spelling
+    /// outright rather than deprecating it.
     private func scrollCaretToVisible() {
         guard let rect = caretRect(for: controller.state.selection.focus) else { return }
-        scrollRectToVisible(rect.insetBy(dx: -48, dy: -12))
+        scrollToVisible(rect.insetBy(dx: -48, dy: -12))
     }
 }
 
