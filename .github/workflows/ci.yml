@@ -261,8 +261,13 @@ jobs:
       # toolchain, CI is the compiler, and a warning turned error hides every
       # later diagnostic behind the first one. Warnings are surfaced and counted
       # below instead, and the flag goes on once a build is green.
+      # `set -o pipefail` is load-bearing: without it the step's exit status is
+      # `tee`'s, which is always 0, and a failing build reports green. That cost
+      # a whole CI round to notice.
       - name: Build
-        run: swift build --build-tests 2>&1 | tee build.log
+        run: |
+          set -euo pipefail
+          swift build --build-tests 2>&1 | tee build.log
 
       - name: Surface warnings
         if: always()
@@ -272,7 +277,9 @@ jobs:
           grep -n "warning:" build.log | head -50 || true
 
       - name: Test
-        run: swift test --parallel 2>&1 | tee test.log
+        run: |
+          set -euo pipefail
+          swift test --parallel 2>&1 | tee test.log
 
       # The M0 exit test: the whole pipeline, headless, asserting on real
       # numbers. Runs here with the synthetic measurer so it is checked on every
@@ -309,9 +316,10 @@ jobs:
       - name: Layout report
         if: always()
         run: |
-          swift run Galley version
+          set -uo pipefail
+          swift run Galley version || true
           swift run Galley layout 2>&1 | tee layout.log
-          swift run Galley providers
+          swift run Galley providers || true
 
       - name: Upload logs on failure
         if: failure()
@@ -415,10 +423,11 @@ jobs:
       - name: Layout report
         if: always()
         run: |
+          set -uo pipefail
+          swift run Galley layout --measurer coretext 2>&1 | tee layout-coretext.log
           swift run Galley layout 2>&1 | tee layout.log
-          swift run Galley layout --width 300
-          swift run Galley providers
-          echo "CoreText page/line counts are recorded in layout.log for comparison with the synthetic run."
+          swift run Galley providers || true
+          echo "CoreText and synthetic page/line counts are recorded for comparison."
 
       - name: Upload logs on failure
         if: failure()

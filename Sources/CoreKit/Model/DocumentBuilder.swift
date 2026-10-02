@@ -82,12 +82,12 @@ public struct DocumentBuilder {
     @discardableResult
     public mutating func setTextAreaWidth(_ widthPoints: Double, pageSize: PageSize = .letter) -> PageMargins {
         let available = pageSize.width.points
-        let each = max(0, (available - widthPoints) / 2)
+        let marginEach = max(0, (available - widthPoints) / 2)
         let margins = PageMargins(
             top: Twip(1440),
-            right: Twip(points: each),
+            right: Twip(points: marginEach),
             bottom: Twip(1440),
-            left: Twip(points: each)
+            left: Twip(points: marginEach)
         )
         setPageSize(pageSize, margins: margins)
         return margins

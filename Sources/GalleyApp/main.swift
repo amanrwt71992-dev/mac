@@ -37,16 +37,13 @@ func usage() -> String {
     """
 }
 
-enum HarnessError: Error, CustomStringConvertible {
-    case checkFailed(String)
-    case unavailableMeasurer(String)
-
-    var description: String {
-        switch self {
-        case .checkFailed(let message):        return message
-        case .unavailableMeasurer(let reason): return reason
-        }
-    }
+/// Right-aligned two-decimal formatting for the layout report.
+///
+/// A free function rather than a `Self` member: `main.swift` is a top-level
+/// script, where `Self` has no meaning.
+func fixed(_ value: Double) -> String {
+    let text = String(format: "%.2f", value)
+    return String(repeating: " ", count: max(0, 7 - text.count)) + text
 }
 
 var verbose = false
@@ -131,7 +128,13 @@ case "layout":
                 for line in paragraph.lines {
                     let text = line.segments.map { $0.text }.joined()
                     let trimmed = text.count > 60 ? String(text.prefix(57)) + "..." : text
-                    print(String(format: "  y=%7.2f h=%5.2f w=%6.2f  %@", line.frame.y, line.frame.height, line.contentWidth, trimmed))
+                    // No `%@` here: `String(format:)` with an object conversion
+                    // specifier depends on NSString bridging, which is not
+                    // reliable in swift-corelibs-foundation. The harness has to
+                    // run on Linux, so only numeric conversions are used.
+                    print("  y=\(fixed(line.frame.y))"
+                          + " h=\(fixed(line.frame.height))"
+                          + " w=\(fixed(line.contentWidth))  \(trimmed)")
                 }
             }
         }

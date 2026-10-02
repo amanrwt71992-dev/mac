@@ -278,7 +278,14 @@ public enum StrikethroughStyle: Hashable, Sendable {
 public enum VerticalAlignment: String, Hashable, Sendable {
     case baseline
     case superscript
-    case subscript
+    /// `w:vertAlign w:val="subscript"`.
+    ///
+    /// Spelled `subscripted` because `subscript` is a Swift declaration keyword
+    /// and cannot be an enum case identifier. Backticking it would compile, but
+    /// would then require backticks at every use site, in every switch, forever —
+    /// for a value whose wire spelling is already pinned by the explicit raw
+    /// value below.
+    case subscripted = "subscript"
 }
 
 public enum Capitalisation: Hashable, Sendable {
