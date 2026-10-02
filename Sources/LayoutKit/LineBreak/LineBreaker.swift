@@ -421,7 +421,7 @@ public struct LineBreaker: Sendable {
             var groupText = ""
             var groupAdvances: [Double] = []
             var groupOffsets: [Int] = []
-            var groupStartX = x
+            let groupStartX = x
             var leader: TabStop.Leader?
             var leaderWidth = 0.0
 

@@ -343,7 +343,7 @@ jobs:
           count=$(strip build.log | grep -cE "warning:" || true)
           echo "compiler warnings: $count"
           if [ "$count" -gt 0 ]; then
-            joined=$(strip build.log | grep -E "warning:" | head -20 | awk '{printf "%s ;; ", $0}' | escape)
+            joined=$(strip build.log | grep -E "warning:" | head -40 | awk '{printf "%s ;; ", $0}' | escape)
             printf '::warning title=swift-warnings::%s warning(s) ;; %s\n' "$count" "$joined"
           fi
 
@@ -511,7 +511,7 @@ jobs:
           count=$(strip build.log | grep -cE "warning:" || true)
           echo "compiler warnings: $count"
           if [ "$count" -gt 0 ]; then
-            joined=$(strip build.log | grep -E "warning:" | head -20 | awk '{printf "%s ;; ", $0}' | escape)
+            joined=$(strip build.log | grep -E "warning:" | head -40 | awk '{printf "%s ;; ", $0}' | escape)
             printf '::warning title=swift-warnings::%s warning(s) ;; %s\n' "$count" "$joined"
           fi
 

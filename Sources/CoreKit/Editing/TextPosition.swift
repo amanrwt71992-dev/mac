@@ -16,7 +16,7 @@ import Foundation
 /// file today can carry a higher id than one that follows it. A `<` that quietly
 /// disagrees with document order is exactly the kind of API that produces
 /// selections which jump to the wrong end. Use `ParagraphOrdering.ordered(_:before:)`
-/// or `TextRange.ordered(in:)`, both of which consult the document.
+/// or `TextSelection.ordered(in:)`, both of which consult the document.
 public struct TextPosition: Hashable, Sendable, CustomStringConvertible {
 
     public var paragraphID: NodeID
@@ -66,7 +66,7 @@ public struct TableCellAddress: Hashable, Sendable {
     }
 }
 
-// MARK: - TextRange
+// MARK: - TextSelection
 
 /// A range of text, possibly spanning paragraphs.
 ///
@@ -75,7 +75,12 @@ public struct TableCellAddress: Hashable, Sendable {
 /// extending a backwards selection has to keep growing leftwards — normalising
 /// eagerly is how editors end up with selections that jump to the other end when
 /// you hold shift and press left.
-public struct TextRange: Hashable, Sendable, CustomStringConvertible {
+/// Named `TextSelection` rather than `TextRange`: an Apple framework exports a
+/// top-level `TextRange`, which makes the shorter name ambiguous at every
+/// unqualified use site in any module that also imports Foundation on macOS. The
+/// longer name is also the more accurate one — this type holds an anchor and a
+/// focus, which is a selection, not merely a span of offsets.
+public struct TextSelection: Hashable, Sendable, CustomStringConvertible {
 
     /// The anchored end — where the user pressed down.
     public var anchor: TextPosition
@@ -114,8 +119,8 @@ public struct TextRange: Hashable, Sendable, CustomStringConvertible {
     }
 
     /// Extends the focus, keeping the anchor fixed.
-    public func extending(to position: TextPosition) -> TextRange {
-        TextRange(anchor: anchor, focus: position)
+    public func extending(to position: TextPosition) -> TextSelection {
+        TextSelection(anchor: anchor, focus: position)
     }
 
     public var description: String {

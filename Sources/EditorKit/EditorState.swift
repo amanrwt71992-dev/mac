@@ -20,7 +20,7 @@ import CoreKit
 public struct EditorState: Hashable, Sendable {
 
     public var document: DocumentModel
-    public var selection: TextRange
+    public var selection: TextSelection
     public var undoStack: UndoStack
 
     /// Which revisions are currently visible. Changing this re-lays out the
@@ -44,7 +44,7 @@ public struct EditorState: Hashable, Sendable {
 
     public init(
         document: DocumentModel,
-        selection: TextRange? = nil,
+        selection: TextSelection? = nil,
         undoStack: UndoStack = UndoStack(),
         markup: RevisionMarkup = .allMarkup,
         authorName: String = "",
@@ -64,7 +64,7 @@ public struct EditorState: Hashable, Sendable {
             // Caret at the very start of the first paragraph, or a synthetic
             // position if the document somehow has none.
             let first = document.paragraphIDsInOrder.first ?? NodeID(0)
-            self.selection = TextRange(caret: TextPosition(paragraphID: first, characterOffset: 0))
+            self.selection = TextSelection(caret: TextPosition(paragraphID: first, characterOffset: 0))
         }
     }
 
@@ -164,7 +164,7 @@ public struct EditorState: Hashable, Sendable {
               coalescingKey: key,
               timestamp: timestamp)
 
-        selection = TextRange(caret: TextPosition(
+        selection = TextSelection(caret: TextPosition(
             paragraphID: caretParagraph,
             characterOffset: caretOffset + text.count
         ))
@@ -221,7 +221,7 @@ public struct EditorState: Hashable, Sendable {
                 startOffset: caret.characterOffset,
                 endOffset: caret.characterOffset - 1
             ), timestamp: timestamp)
-            selection = TextRange(caret: caret.advanced(by: -1))
+            selection = TextSelection(caret: caret.advanced(by: -1))
             return
         }
 
@@ -239,7 +239,7 @@ public struct EditorState: Hashable, Sendable {
             author: author
         )
         apply(mutation, name: "Delete", timestamp: timestamp)
-        selection = TextRange(caret: TextPosition(paragraphID: previousID, characterOffset: boundary))
+        selection = TextSelection(caret: TextPosition(paragraphID: previousID, characterOffset: boundary))
     }
 
     /// fn-Delete: deletes one character after the caret, or joins with the next
@@ -272,7 +272,9 @@ public struct EditorState: Hashable, Sendable {
             return
         }
 
-        guard let nextID = document.paragraphID(after: caret.paragraphID) else { return }
+        // Only the existence of a next paragraph matters here; `joinParagraph
+        // WithNext` finds it itself.
+        guard document.paragraphID(after: caret.paragraphID) != nil else { return }
         let mutation = DocumentMutation(
             operations: [.joinParagraphWithNext(paragraph: caret.paragraphID)],
             author: author
@@ -302,7 +304,7 @@ public struct EditorState: Hashable, Sendable {
         // Pending formatting does not survive Return: Word clears it, which is
         // why typing a bold word then pressing Return gives normal text.
         pendingRunProperties = nil
-        selection = TextRange(caret: TextPosition(paragraphID: newID, characterOffset: 0))
+        selection = TextSelection(caret: TextPosition(paragraphID: newID, characterOffset: 0))
     }
 
     /// Tab: inserts a tab character.
@@ -327,7 +329,7 @@ public struct EditorState: Hashable, Sendable {
         apply(DocumentMutation(operations: operations, author: author),
               name: undoName ?? "Delete",
               timestamp: timestamp)
-        selection = TextRange(caret: ordered.start)
+        selection = TextSelection(caret: ordered.start)
         return true
     }
 
@@ -339,7 +341,7 @@ public struct EditorState: Hashable, Sendable {
     /// properties — the merged paragraph keeps the *first* one's, which is why
     /// selecting from a body paragraph into a heading and deleting leaves body
     /// formatting behind.
-    private mutating func operationsDeletingRange(_ range: TextRange, timestamp: Date) -> [MutationOp] {
+    private mutating func operationsDeletingRange(_ range: TextSelection, timestamp: Date) -> [MutationOp] {
         let ordered = range.ordered(in: document)
         let start = ordered.start
         let end = ordered.end
@@ -386,7 +388,7 @@ public struct EditorState: Hashable, Sendable {
                     timestamp: timestamp
                 ))
             }
-            if let last = document.paragraph(withID: end.paragraphID) {
+            if document.paragraph(withID: end.paragraphID) != nil {
                 operations.append(deletionOperation(
                     paragraph: end.paragraphID,
                     characterOffset: 0,
@@ -445,13 +447,13 @@ public struct EditorState: Hashable, Sendable {
     private mutating func restoreSelectionAfterUndo() {
         guard selection.focus.paragraphOrNil(in: document) != nil else {
             let first = document.paragraphIDsInOrder.first ?? NodeID(0)
-            selection = TextRange(caret: TextPosition(paragraphID: first, characterOffset: 0))
+            selection = TextSelection(caret: TextPosition(paragraphID: first, characterOffset: 0))
             return
         }
         // Clamp the offset: the paragraph may be shorter than it was.
         guard let paragraph = document.paragraph(withID: selection.focus.paragraphID) else { return }
         let clamped = min(selection.focus.characterOffset, paragraph.characterCount)
-        selection = TextRange(caret: TextPosition(paragraphID: paragraph.id, characterOffset: clamped))
+        selection = TextSelection(caret: TextPosition(paragraphID: paragraph.id, characterOffset: clamped))
     }
 
     // MARK: Formatting

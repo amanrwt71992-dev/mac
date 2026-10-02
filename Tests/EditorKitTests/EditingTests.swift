@@ -28,12 +28,12 @@ final class EditingTests: XCTestCase {
         return (state, ids)
     }
 
-    private func caret(_ id: NodeID, _ offset: Int) -> TextRange {
-        TextRange(caret: TextPosition(paragraphID: id, characterOffset: offset))
+    private func caret(_ id: NodeID, _ offset: Int) -> TextSelection {
+        TextSelection(caret: TextPosition(paragraphID: id, characterOffset: offset))
     }
 
-    private func span(_ from: (NodeID, Int), _ to: (NodeID, Int)) -> TextRange {
-        TextRange(
+    private func span(_ from: (NodeID, Int), _ to: (NodeID, Int)) -> TextSelection {
+        TextSelection(
             anchor: TextPosition(paragraphID: from.0, characterOffset: from.1),
             focus: TextPosition(paragraphID: to.0, characterOffset: to.1)
         )
@@ -79,7 +79,10 @@ final class EditingTests: XCTestCase {
 
         state.deleteBackward(timestamp: start.addingTimeInterval(0.2))
         state.deleteBackward(timestamp: start.addingTimeInterval(0.3))
-        XCTAssertEqual(state.undoStack.depth, 3, "the two backspaces coalesce with each other")
+        // Two, not three: all three backspaces are contiguous, so they coalesce
+        // into one step. That is Word's behaviour and the reason holding down
+        // Backspace is a single ⌘Z rather than one per character.
+        XCTAssertEqual(state.undoStack.depth, 2, "contiguous backspaces coalesce into the one step")
         XCTAssertEqual(state.document.paragraph(withID: id)?.plainText(), "")
     }
 
@@ -400,7 +403,7 @@ final class EditingTests: XCTestCase {
     }
 
     func testParagraphIDNeighboursFollowReadingOrder() {
-        var (state, ids) = editor(with: ["a", "b", "c"])
+        let (state, ids) = editor(with: ["a", "b", "c"])
         XCTAssertEqual(state.document.paragraphID(before: ids[1]), ids[0])
         XCTAssertEqual(state.document.paragraphID(after: ids[1]), ids[2])
         XCTAssertNil(state.document.paragraphID(before: ids[0]))

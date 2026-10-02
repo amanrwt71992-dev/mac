@@ -517,7 +517,7 @@ struct SelfTest {
             var editor = EditorState.blank(authorName: "Tester")
             let start = Date(timeIntervalSince1970: 1_700_000_000)
             editor.insertText("abcdef", timestamp: start)
-            editor.selection = TextRange(caret: TextPosition(
+            editor.selection = TextSelection(caret: TextPosition(
                 paragraphID: editor.selection.focus.paragraphID,
                 characterOffset: 3
             ))
@@ -543,7 +543,7 @@ struct SelfTest {
             let first = builder.paragraph("one")
             let second = builder.paragraph("two")
             var editor = EditorState(document: builder.build(), authorName: "Tester")
-            editor.selection = TextRange(caret: TextPosition(paragraphID: second, characterOffset: 0))
+            editor.selection = TextSelection(caret: TextPosition(paragraphID: second, characterOffset: 0))
 
             editor.deleteBackward(timestamp: Date(timeIntervalSince1970: 1_700_000_000))
             try expectEqual(editor.document.paragraphIDsInOrder.count, 1, "the two paragraphs became one")
@@ -558,7 +558,7 @@ struct SelfTest {
             _ = builder.paragraph("bbb")
             let third = builder.paragraph("ccc")
             var editor = EditorState(document: builder.build(), authorName: "Tester")
-            editor.selection = TextRange(
+            editor.selection = TextSelection(
                 anchor: TextPosition(paragraphID: first, characterOffset: 1),
                 focus: TextPosition(paragraphID: third, characterOffset: 2)
             )
@@ -574,7 +574,7 @@ struct SelfTest {
             var builder = DocumentBuilder(styles: SampleDocument.flatStyles)
             let id = builder.paragraph("Hello world")
             var editor = EditorState(document: builder.build(), authorName: "Tester")
-            editor.selection = TextRange(
+            editor.selection = TextSelection(
                 anchor: TextPosition(paragraphID: id, characterOffset: 6),
                 focus: TextPosition(paragraphID: id, characterOffset: 11)
             )
@@ -594,7 +594,7 @@ struct SelfTest {
             var editor = EditorState(document: builder.build(), authorName: "Tester")
             let start = Date(timeIntervalSince1970: 1_700_000_000)
 
-            editor.selection = TextRange(
+            editor.selection = TextSelection(
                 anchor: TextPosition(paragraphID: id, characterOffset: 0),
                 focus: TextPosition(paragraphID: id, characterOffset: 5)
             )
@@ -611,12 +611,12 @@ struct SelfTest {
                             "undo restores the single original run exactly")
 
             // Mixed selection: part bold, part not. Word makes it all bold.
-            editor.selection = TextRange(
+            editor.selection = TextSelection(
                 anchor: TextPosition(paragraphID: id, characterOffset: 0),
                 focus: TextPosition(paragraphID: id, characterOffset: 5)
             )
             editor.toggleBold(timestamp: start.addingTimeInterval(2))
-            editor.selection = TextRange(
+            editor.selection = TextSelection(
                 anchor: TextPosition(paragraphID: id, characterOffset: 0),
                 focus: TextPosition(paragraphID: id, characterOffset: 11)
             )
@@ -630,7 +630,7 @@ struct SelfTest {
             let id = builder.paragraph("Original")
             var editor = EditorState(document: builder.build(), authorName: "Reviewer")
             editor.trackChanges = true
-            editor.selection = TextRange(
+            editor.selection = TextSelection(
                 anchor: TextPosition(paragraphID: id, characterOffset: 0),
                 focus: TextPosition(paragraphID: id, characterOffset: 8)
             )
