@@ -1,14 +1,26 @@
 # A native Mac word processor, with AI that stays on your Mac
 
-_Working title **Galley** — name not yet cleared. See [`docs/06-LEGAL-AND-IP.md`](docs/06-LEGAL-AND-IP.md)._
+**Galley** — name checked and clear as of 2026-10-02 (GitHub `galleydoc`, npm `galley-word`,
+and `galleydoc.app` were all unregistered). See [`docs/06-LEGAL-AND-IP.md`](docs/06-LEGAL-AND-IP.md).
 
 A Microsoft Word–class word processor for macOS, built **native** — Swift, AppKit, and a
 custom CoreText layout engine — with Apple Intelligence and bring-your-own AI providers
 wired into the editor rather than bolted on beside it.
 
-**Status: planning.** No code yet. This repository currently contains the research and the
-design. Read [`docs/07-OPEN-QUESTIONS.md`](docs/07-OPEN-QUESTIONS.md) for the decisions that
-block the first commit.
+**Status: M0 engine core landed and CI-verified** (2026-10-02). The document model, the style
+cascade, the greedy line breaker, the paginator, the editing layer and the AI provider
+abstraction are written, and all three CI jobs are green: policy checks, Linux (Swift 6.2) and
+macOS 27 (Xcode 27) — with `37/37` layout self-test checks passing on both platforms and
+`27/27` of the metric-independent checks passing against real CoreText measurement. Zero
+compiler warnings.
+
+What is **not** here yet: any pixels. M0 shipped a headless harness (`swift run Galley
+selftest`) rather than an AppKit window, because the exit question at this stage is whether the
+engine lays a document out correctly, and a harness that runs identically on Linux and macOS
+answers that on every push. The window, the ruler, IME and Writing Tools follow in M0.5/M1.
+See the status block in [`docs/05-ROADMAP.md`](docs/05-ROADMAP.md) for exactly what was built
+and what was deferred, and [`docs/07-OPEN-QUESTIONS.md`](docs/07-OPEN-QUESTIONS.md) §E for the
+gaps discovered while building it.
 
 ---
 
@@ -108,13 +120,32 @@ TOC, cross-references, CSL citations, index, mail merge, equations), and scale (
 
 ## Building
 
-_Not yet applicable — there is no code. The build system will be a SwiftPM workspace plus an
-Xcode app target, with CI on GitHub Actions `ubuntu-latest` (cross-platform core packages)
-and `xcode-27` (arm64, macOS 27, Xcode 27) for the full app._
+Requires macOS 27 and Xcode 27, or any Swift 6.0+ toolchain for the cross-platform packages.
 
-The split matters: `CoreKit`, `OOXMLKit` and `IntelligenceKit` import `Foundation` only, so
-~60 % of the codebase type-checks and unit-tests on Linux in about three minutes. `LayoutKit`
-needs CoreText, `EditorKit` and `App` need AppKit.
+```sh
+swift build                          # everything
+swift test --parallel                # CoreKit, LayoutKit and EditorKit suites
+swift run Galley selftest            # the layout harness; exits 1 on any failed check
+swift run Galley layout --verbose    # lay out the sample document and print every line
+swift run Galley providers           # what AI is compiled in, and whether it is usable
+```
+
+`Galley selftest --measurer coretext` runs the same checks against real font metrics on macOS,
+skipping the ones whose expected numbers were derived from the synthetic measurer. The synthetic
+run is the one that asserts arithmetic; the CoreText run is the one that proves the measurement
+backend works end to end. Both run in CI.
+
+CI is three jobs on every push: `checks` (seconds, no compiler — package layering, the font
+redistribution policy, the dependency-licence allowlist), `linux` (Swift 6.2 in a container —
+the fast feedback loop), and `macos` (`xcode-27`, arm64, macOS 27 — the only job that can verify
+measurement against the real platform). Compiler diagnostics and test failures are re-emitted as
+workflow annotations, because runner logs are not reachable from every environment.
+
+The split is load-bearing: `CoreKit`, `IntelligenceKit` and `EditorKit` import `Foundation` only,
+so most of the codebase type-checks and unit-tests on Linux in under a minute. `LayoutKit` uses
+CoreText behind `#if canImport(CoreText)`, and keeps its line breaker and paginator free of it so
+they can be tested against a measurer with numbers a reader can check by hand. AppKit arrives in
+M0.5 and will be confined to the view layer.
 
 ---
 

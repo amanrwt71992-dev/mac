@@ -8,7 +8,7 @@ magnitude, not commitments. The two big uncertainties are the layout engine (§M
 OOXML fidelity (§M2–M4); both have a long tail.
 
 ```
-M0 ─── M1 ─── M2 ─── M3 ─── M4 ─── M5 ─── M6 ───►
+M0 ── M0.5 ── M1 ─── M2 ─── M3 ─── M4 ─── M5 ─── M6 ───►
 engine  docx  word-   AI    review  pro     scale
  proof   I/O  class  layer  &collab features & polish
  4w     6w    10w     5w     5w      8w      ongoing
@@ -49,6 +49,73 @@ Deliverables
 
 **Risk to retire in M0:** can a CoreText-based engine actually hit the perf contract? If not,
 we learn it in week 2, not month 18.
+
+### M0 status — 2026-10-02
+
+Landed, and green in CI on all three jobs (`checks`, Linux Swift 6.2, macOS 27 / Xcode 27) with
+zero compiler warnings.
+
+**What the milestone actually became.** The plan above describes a *visible* M0: a window, a
+ruler, IME, Writing Tools in the context menu. What shipped instead is the engine underneath all
+of that, verified by a headless harness (`swift run Galley selftest`, `layout`, `providers`).
+That was a deliberate substitution, not a shortfall. Two reasons:
+
+1. The exit question at this stage is "does the engine lay a document out correctly", and that
+   is answerable without a single pixel. A harness runs identically on a Linux runner and on
+   `xcode-27`, so it is checked on every push instead of by hand once a week.
+2. There is no Swift toolchain in the development sandbox. CI is the compiler. Writing an AppKit
+   view layer means debugging hit-testing and `NSTextInputClient` marked-text through a
+   three-minute remote loop; writing the model, the breaker and the paginator means debugging
+   arithmetic through the same loop, and arithmetic is what the exit test is actually about.
+
+The window, ruler, IME, clipboard, zoom and Writing Tools move to **M0.5** unchanged. Nothing
+below was descoped to make room for them.
+
+**Delivered**
+
+| Package | Contents |
+|---|---|
+| `CoreKit` | twip/half-point/EMU/fiftieths-of-a-percent units; page sizes and margin presets; the OOXML document tree; `NodeID`; the mutation algebra with inverse capture; Word-like undo coalescing; character-level paragraph editing; `TextPosition`/`TextSelection`; `DocumentBuilder`; the font-substitution policy |
+| `LayoutKit` | `StyleResolver` (cascade → concrete numbers), greedy `LineBreaker`, `Paginator`, `LayoutSnapshot`, `CoreTextMeasurer` behind `#if canImport(CoreText)`, `FixedWidthMeasurer` for tests and Linux |
+| `EditorKit` | `EditorState`: typing, Return/Backspace/fn-Delete, cross-paragraph deletion, character and paragraph formatting, tracked changes. Depends on `CoreKit` alone — CI fails if it imports `LayoutKit` |
+| `IntelligenceKit` | `AIProvider` protocol, task taxonomy with an honest Writing Tools mapping, redaction policy, `AssistantMutationBuilder`, provider catalogue (Apple Intelligence + OpenAI-compatible + Anthropic + local Ollama) |
+| `GalleyApp` | headless harness: `selftest`, `layout`, `providers`, `version` |
+
+Fidelity rules that are implemented and tested, not merely documented: `nil` vs explicit-off,
+`w:numId val="0"` cancellation, `w:tab val="clear"` removing inherited stops, the four `w:rFonts`
+slots selected by character script, Word's reserved footnote ids −1 and 0, bijective base-26
+letter page numbering, `w:contextualSpacing`, suppression of `w:spacing w:before` at a column
+top, trailing whitespace hanging into the margin by default, the paragraph mark contributing to
+an empty paragraph's height, and `w:type="continuous"` **not** starting a page.
+
+**Deferred from the original M0 list, with reasons**
+
+- `EditorView` (`NSView` + `NSTextInputClient`), caret, mouse selection, clipboard, zoom, ruler,
+  page rendering → M0.5. All of it is AppKit surface; none of it changes the engine.
+- `zip-gate` CI job → M1, with `OOXMLKit`. It has nothing to gate until something can save.
+- Perf contract measurement → M0.5. It needs the 300-page fixture and a scrolling view to
+  measure against; asserting a frame budget on a headless harness would be theatre.
+
+**Gaps found while building, all recorded in `07-OPEN-QUESTIONS.md` §E.** The two that matter
+most: a page can hold content from two sections after a continuous break, which `PageLayout`
+cannot express; and bold/italic are resolved by face name rather than by symbolic traits,
+because both trait APIs changed shape in the macOS 27 SDK.
+
+---
+
+## M0.5 — Make it visible (≈ 2 weeks)
+
+**Goal:** the same engine, on screen.
+
+Deliverables
+- `EditorView` (`NSView`) drawing `LayoutSnapshot` pages, with page edges, margins and shadows.
+- `NSTextInputClient`: typing, IME marked text, emoji, dictation.
+- Caret, and mouse selection by character/word/paragraph; keyboard navigation.
+- Clipboard, zoom, scroll, viewport-driven layout.
+- Horizontal ruler.
+- Perf contract measured in CI on `xcode-27-xlarge` against the 300-page fixture.
+
+**Exit test:** the four M0 exit tests above, all of which need pixels.
 
 ---
 

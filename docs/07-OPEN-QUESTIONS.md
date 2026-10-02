@@ -142,6 +142,75 @@ the app can be paid while the AI stays entirely BYOK (no metering, no credits, n
 
 ---
 
+## E. Found while building M0 (2026-10-02)
+
+Not questions for the user — a running list of places where the implementation is knowingly
+incomplete, so that none of them is rediscovered as a bug later. Each is marked with the
+milestone that should close it.
+
+### E1. A page can hold content from two sections — `PageLayout` cannot say so
+**M1.** `w:type="continuous"` correctly does not start a new page, which means one page can carry
+the end of section 1 and the start of section 2 — with different column counts, margins and
+headers. `PageLayout` has a single `sectionIndex` and a single `columns` array, so it reports the
+first section's geometry for the whole page. The column geometry itself resolves correctly
+(asserted in CI); only the per-page attribution is wrong. Fixing it means either splitting a page
+into column-band ranges with their own section reference, or making `columns` per-paragraph.
+Until then a continuous section break that changes the column count mid-page will lay the second
+section's text out at the first section's column width.
+
+### E2. Bold and italic are resolved by face name, not by symbolic traits
+**M1.** `CoreTextMeasurer` asks for `"Carlito Bold Italic"` rather than requesting
+`CTFontSymbolicTraits`. Both trait routes failed against the macOS 27 SDK: the descriptor route
+needs `kCTFontTraitsAttribute`'s inner trait-key constants, which the SDK does not export to
+Swift under their documented spellings, and `CTFontCreateCopyWithSymbolicTraits` imports with
+five parameters rather than four. Name lookup is stable and correct for every family we ship,
+but for a family whose bold face is not named `"Family Bold"` it silently falls back to the
+regular face. The refinement is to read `CTFontGetSymbolicTraits` back and record that a run's
+metrics are approximate, so the fidelity matrix reports it instead of quietly differing from Word.
+
+### E3. Empty paragraphs have no `ParagraphPosition`
+**M0.5.** A paragraph with no lines produces no chunk, so the navigation pane and Find cannot
+point at a blank line. It occupies the right amount of vertical space (`recordEmptyParagraph`),
+it simply has no frame to report. Matters as soon as there is a scrollbar minimap or a
+"scroll to this heading" action.
+
+### E4. No hyphenation
+**M2.** `hyphenationCandidates` returns `[]`. macOS has no public hyphenation API — CoreText has
+none, and TextKit's `hyphenationFactor` drives a private implementation we will not call. Safe
+for now because `HyphenationSettings.enabled` defaults to false, so no code path can ask. The
+plan is a Liang pattern table, which is also what makes hyphenation work per language rather
+than per platform.
+
+### E5. `w:caps` and `w:smallCaps` are not applied
+**M1.** Deferred rather than approximated, because the only correct implementation is a font
+feature (`kUpperCaseType`/`kSmallCapsSelectorType`), and the tempting shortcut — uppercasing the
+string — would break Find and corrupt the file on save. The text in the model must stay exactly
+as the author wrote it.
+
+### E6. Multi-column paragraphs are not re-broken per column
+**M2.** A paragraph split across two columns of different widths is currently broken once, at
+the first column's width. Correct behaviour needs re-breaking the remainder against the new
+width, which means the breaker has to be resumable mid-paragraph. Only visible when a section
+uses unequal column widths (`w:col w:w`), which is rare but not exotic.
+
+### E7. `w:vAlign w:val="both"` is treated as top-aligned
+**M2.** Justified vertical alignment distributes the paragraph gap so the column's first and last
+baselines land on the text-area edges. Needs a second pass after all lines are placed, which the
+paginator's single forward pass does not currently do.
+
+### E8. Soft hyphens are dropped during flattening
+**M1.** `w:softHyphen` is removed rather than preserved as a zero-width break opportunity, so a
+document that uses them will not break where its author intended. It must be preserved in the
+model on save regardless — this is only about layout.
+
+### E9. Cross-paragraph tracked deletion does not join the paragraph marks
+**M1.** With `w:trackChanges` on, deleting across paragraphs marks the text deleted and leaves
+the paragraph structure intact. Word additionally marks each intervening paragraph mark deleted
+(`w:rPr/w:del` inside `w:pPr`), so accepting the change merges the paragraphs. Accepting ours
+leaves empty paragraphs behind. Reversible and never loses data, which is why it shipped.
+
+---
+
 ## Summary of recommendations (the short version)
 
 | # | Question | Recommendation |
