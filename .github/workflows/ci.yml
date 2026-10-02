@@ -265,9 +265,22 @@ jobs:
       # `tee`'s, which is always 0, and a failing build reports green. That cost
       # a whole CI round to notice.
       - name: Build
+        # Compiler diagnostics are re-emitted as annotations. Runner logs live on
+        # hosts that are not reachable from every environment, and SwiftPM's
+        # output on Linux is not picked up by GitHub's default problem matchers,
+        # so without this a failed build reports nothing but an exit code.
         run: |
-          set -euo pipefail
+          set -uo pipefail
           swift build --build-tests 2>&1 | tee build.log
+          status=${PIPESTATUS[0]}
+          if [ "$status" -ne 0 ]; then
+            grep -E "error:" build.log | sed -e 's/\x1b\[[0-9;]*m//g' | head -25 \
+              | while IFS= read -r line; do
+                  printf '::error title=swift-build::%s\n' "$(printf '%s' "$line" | sed -e 's/%/%25/g' -e 's/\r/%0D/g')"
+                done
+            echo "::error title=swift-build::build failed with $status; $(grep -cE 'error:' build.log) diagnostics in build.log"
+            exit "$status"
+          fi
 
       - name: Surface warnings
         if: always()
@@ -358,7 +371,22 @@ jobs:
         run: sudo xcode-select --switch /Applications/Xcode_27.0.app || sudo xcode-select --print-path
 
       - name: Build
-        run: swift build --build-tests 2>&1 | tee build.log
+        # Compiler diagnostics are re-emitted as annotations. Runner logs live on
+        # hosts that are not reachable from every environment, and SwiftPM's
+        # output on Linux is not picked up by GitHub's default problem matchers,
+        # so without this a failed build reports nothing but an exit code.
+        run: |
+          set -uo pipefail
+          swift build --build-tests 2>&1 | tee build.log
+          status=${PIPESTATUS[0]}
+          if [ "$status" -ne 0 ]; then
+            grep -E "error:" build.log | sed -e 's/\x1b\[[0-9;]*m//g' | head -25 \
+              | while IFS= read -r line; do
+                  printf '::error title=swift-build::%s\n' "$(printf '%s' "$line" | sed -e 's/%/%25/g' -e 's/\r/%0D/g')"
+                done
+            echo "::error title=swift-build::build failed with $status; $(grep -cE 'error:' build.log) diagnostics in build.log"
+            exit "$status"
+          fi
 
       - name: Surface warnings
         if: always()
@@ -368,7 +396,9 @@ jobs:
           grep -n "warning:" build.log | head -50 || true
 
       - name: Test
-        run: swift test --parallel 2>&1 | tee test.log
+        run: |
+          set -euo pipefail
+          swift test --parallel 2>&1 | tee test.log
 
       # The only place real font metrics are exercised. Checks whose expected
       # numbers were derived from the synthetic measurer skip themselves here;

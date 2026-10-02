@@ -553,7 +553,7 @@ public struct ParagraphBorders: Hashable, Sendable {
     public static let none = ParagraphBorders()
 
     /// The AutoFormat-As-You-Type border keys produce exactly these.
-    public static func box(style: BorderStyle = .single, width: EighthOfAPoint = 6, color: DocumentColor = .automatic) -> ParagraphBorders {
+    public static func box(style: BorderStyle = .single, width: EighthOfAPoint = EighthOfAPoint(6), color: DocumentColor = .automatic) -> ParagraphBorders {
         let edge = BorderDefinition(style: style, width: width, color: color)
         return ParagraphBorders(top: edge, left: edge, bottom: edge, right: edge)
     }
@@ -581,7 +581,7 @@ public struct BorderDefinition: Hashable, Sendable {
 
     public init(
         style: BorderStyle = .single,
-        width: EighthOfAPoint = 6,
+        width: EighthOfAPoint = EighthOfAPoint(6),
         color: DocumentColor = .automatic,
         spacePoints: Double = 0
     ) {
