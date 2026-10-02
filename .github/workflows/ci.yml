@@ -302,6 +302,15 @@ jobs:
           swift build --build-tests 2>&1 | tee build.log
           status=${PIPESTATUS[0]}
           set -e
+          # Emitted unconditionally. The Linux job has now failed twice with exit
+          # code 2 and no diagnostics at all, which means something in this step
+          # is not reaching the reporting code; a notice that always fires is how
+          # that gets distinguished from "the build was silent".
+          printf '::notice title=swift-build::exit %s, %s log lines, %s error lines, %s warning lines\n' \
+            "$status" \
+            "$(wc -l < build.log 2>/dev/null || echo 0)" \
+            "$(strip build.log 2>/dev/null | grep -cE 'error:' || true)" \
+            "$(strip build.log 2>/dev/null | grep -cE 'warning:' || true)"
           if [ "$status" -ne 0 ]; then
             annotate build.log swift-build "build failed with status $status"
             exit "$status"
@@ -452,6 +461,15 @@ jobs:
           swift build --build-tests 2>&1 | tee build.log
           status=${PIPESTATUS[0]}
           set -e
+          # Emitted unconditionally. The Linux job has now failed twice with exit
+          # code 2 and no diagnostics at all, which means something in this step
+          # is not reaching the reporting code; a notice that always fires is how
+          # that gets distinguished from "the build was silent".
+          printf '::notice title=swift-build::exit %s, %s log lines, %s error lines, %s warning lines\n' \
+            "$status" \
+            "$(wc -l < build.log 2>/dev/null || echo 0)" \
+            "$(strip build.log 2>/dev/null | grep -cE 'error:' || true)" \
+            "$(strip build.log 2>/dev/null | grep -cE 'warning:' || true)"
           if [ "$status" -ne 0 ]; then
             annotate build.log swift-build "build failed with status $status"
             exit "$status"

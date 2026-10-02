@@ -348,7 +348,7 @@ public struct ParagraphProperties: Hashable, Sendable {
         lineSpacing: LineSpacing? = nil,
         contextualSpacing: Bool? = nil,
         tabs: [TabStop]? = nil,
-        defaultTabBehaviour: DefaultTabBehaviour? = nil,
+        defaultTabStopBehaviour: DefaultTabBehaviour? = nil,
         keepLinesTogether: Bool? = nil,
         keepWithNext: Bool? = nil,
         pageBreakBefore: Bool? = nil,
@@ -374,7 +374,7 @@ public struct ParagraphProperties: Hashable, Sendable {
         self.lineSpacing = lineSpacing
         self.contextualSpacing = contextualSpacing
         self.tabs = tabs
-        self.defaultTabBehaviour = defaultTabBehaviour
+        self.defaultTabStopBehaviour = defaultTabStopBehaviour
         self.keepLinesTogether = keepLinesTogether
         self.keepWithNext = keepWithNext
         self.pageBreakBefore = pageBreakBefore
@@ -411,7 +411,7 @@ public struct ParagraphProperties: Hashable, Sendable {
         if let value = other.lineSpacing { result.lineSpacing = value }
         if let value = other.contextualSpacing { result.contextualSpacing = value }
         if let value = other.tabs { result.tabs = Self.mergeTabs(base: result.tabs, overlay: value) }
-        if let value = other.defaultTabBehaviour { result.defaultTabBehaviour = value }
+        if let value = other.defaultTabStopBehaviour { result.defaultTabStopBehaviour = value }
         if let value = other.keepLinesTogether { result.keepLinesTogether = value }
         if let value = other.keepWithNext { result.keepWithNext = value }
         if let value = other.pageBreakBefore { result.pageBreakBefore = value }
