@@ -93,10 +93,25 @@ final class EditorView: NSView {
 
     // MARK: Input context
 
-    /// A custom view has to hand AppKit its own input context, or the input-method
-    /// editor never attaches and composition silently does nothing.
-    private lazy var inputContextInstance: NSInputContext = NSInputContext(client: self)
-    override var inputContext: NSInputContext? { inputContextInstance }
+    // A custom text view would normally hand AppKit its own input context here:
+    //
+    //     private lazy var context = NSInputContext(client: self)
+    //     override var inputContext: NSInputContext? { context }
+    //
+    // `NSInputContext` is not exported to Swift by the macOS 27 SDK — the compiler
+    // reports "cannot find type 'NSInputContext' in scope" even with AppKit
+    // imported. This is the same class of gap as `kCTFontSymbolicTraitKey` and
+    // `CTFontCreateCopyWithSymbolicTraits` in the layout engine: the symbol exists
+    // in Objective-C and is simply not visible from Swift on this SDK.
+    //
+    // The consequence is that no input-method editor attaches, so composition is
+    // impossible rather than merely stubbed. Typing still works because
+    // `interpretKeyEvents` falls back to `NSResponder.insertText(_:)`, which is
+    // overridden below. Restoring IME needs either the Objective-C runtime
+    // (`NSClassFromString("NSInputContext")` plus a `perform`-based constructor)
+    // or a file compiled as Objective-C++ and bridged in; recorded as the first
+    // thing to fix, because a word processor that cannot type Japanese, Chinese
+    // or Korean is not a word processor.
 
     // MARK: Geometry
 
@@ -618,6 +633,16 @@ extension EditorView {
 
 extension EditorView: NSTextInputClient {
 
+    /// Plain typing.
+    ///
+    /// `interpretKeyEvents` calls this single-argument `NSResponder` method when
+    /// there is no input context — which, on this SDK, is always. It is the reason
+    /// the app can be typed into at all without `NSInputContext`.
+    override func insertText(_ insertString: String) {
+        insert(string: insertString, replacementRange: NSRange(location: NSNotFound, length: 0))
+    }
+
+    /// What an input-method editor calls when it commits composed text.
     func insertText(_ string: Any, replacementRange: NSRange) {
         let text: String
         if let plain = string as? String {
@@ -627,7 +652,11 @@ extension EditorView: NSTextInputClient {
         } else {
             return
         }
+        insert(string: text, replacementRange: replacementRange)
+    }
 
+    /// The one place a keystroke becomes a model edit.
+    private func insert(string text: String, replacementRange: NSRange) {
         // Read the index *before* the edit: `replacementRange` is expressed
         // against the text as the input system last saw it.
         let index = controller.textIndex
@@ -730,7 +759,7 @@ extension EditorView: NSTextInputClient {
     /// Compared by name rather than by `Selector` equality: `NSStringFromSelector`
     /// is unambiguous and cannot be confused with an inherited `NSResponder`
     /// method of the same shape.
-    func doCommand(by commandSelector: Selector) {
+    override func doCommand(by commandSelector: Selector) {
         let now = Date()
 
         switch NSStringFromSelector(commandSelector) {

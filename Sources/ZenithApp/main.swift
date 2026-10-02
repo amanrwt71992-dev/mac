@@ -49,7 +49,13 @@ if ProcessInfo.processInfo.environment["ZENITH_HEADLESS"] != nil {
     expect(!snapshot.pages.isEmpty, "layout produced at least one page")
     expect(snapshot.pages.count >= 1, "page count is \(snapshot.pageCount)")
 
-    let lineCount = snapshot.pages.reduce(0) { $0 + $1.paragraphs.reduce(0) { $1 + $2.lines.count } }
+    // Spelled with named parameters: the implicit $0/$1/$2 shorthand does not
+    // nest, and the inner closure silently binds to the outer one's arguments.
+    let lineCount = snapshot.pages.reduce(0) { pageTotal, page in
+        pageTotal + page.paragraphs.reduce(0) { paragraphTotal, paragraph in
+            paragraphTotal + paragraph.lines.count
+        }
+    }
     expect(lineCount > 10, "layout produced \(lineCount) lines")
 
     expect(index.entries.count == document.paragraphIDsInOrder.count,
@@ -77,7 +83,10 @@ if ProcessInfo.processInfo.environment["ZENITH_HEADLESS"] != nil {
                 for segment in line.segments {
                     guard sampled < 200 else { break }
                     sampled += 1
-                    let name = controller.measurer.postScriptName(for: segment.style)
+                    // `postScriptName` takes the resolved `FontSpec`, not the whole
+                    // run style: colour, highlight and language do not affect which
+                    // face CoreText picks.
+                    let name = controller.measurer.postScriptName(for: segment.style.font)
                     if !name.isEmpty { resolved += 1 }
                 }
             }
