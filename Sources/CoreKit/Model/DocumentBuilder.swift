@@ -22,7 +22,7 @@ public struct DocumentBuilder {
 
     public init(
         regionUsesLetter: Bool = true,
-        author: String = "Galley",
+        author: String = "Zenith Workspace",
         styles: StyleTable? = nil,
         settings: DocumentSettings? = nil
     ) {

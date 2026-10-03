@@ -1,23 +1,34 @@
-# A native Mac word processor, with AI that stays on your Mac
-
-**Galley** — name checked and clear as of 2026-10-02 (GitHub `galleydoc`, npm `galley-word`,
-and `galleydoc.app` were all unregistered). See [`docs/06-LEGAL-AND-IP.md`](docs/06-LEGAL-AND-IP.md).
+# Zenith Workspace — a native Mac word processor, with AI that stays on your Mac
 
 A Microsoft Word–class word processor for macOS, built **native** — Swift, AppKit, and a
 custom CoreText layout engine — with Apple Intelligence and bring-your-own AI providers
 wired into the editor rather than bolted on beside it.
 
-**Status: M0 engine core landed and CI-verified** (2026-10-02). The document model, the style
-cascade, the greedy line breaker, the paginator, the editing layer and the AI provider
-abstraction are written, and all three CI jobs are green: policy checks, Linux (Swift 6.2) and
-macOS 27 (Xcode 27) — with `37/37` layout self-test checks passing on both platforms and
-`27/27` of the metric-independent checks passing against real CoreText measurement. Zero
-compiler warnings.
+> **Name.** *Zenith Workspace*, adopted 2026-10-03. **It is not a cleared trademark.**
+> Bare `ZENITH` is held live in Class 009 — computer software — by Zenith Electronics LLC,
+> an LG subsidiary whose business is technology *licensing*, and which filed an AI-software
+> mark in June 2026. The composite form changes the commercial impression and materially
+> lowers the risk, but does not remove it. Read
+> [`docs/06-LEGAL-AND-IP.md`](docs/06-LEGAL-AND-IP.md) §1 before shipping anything.
+> Earlier working name: `Galley`. `Continuum` was rejected outright — it is a live
+> Microsoft trademark (Reg. 5355493, Class 009, Active).
 
-What is **not** here yet: any pixels. M0 shipped a headless harness (`swift run Galley
-selftest`) rather than an AppKit window, because the exit question at this stage is whether the
-engine lays a document out correctly, and a harness that runs identically on Linux and macOS
-answers that on every push. The window, the ruler, IME and Writing Tools follow in M0.5/M1.
+**Status: the application runs** (2026-10-03). CI builds a release binary, runs it headless to
+prove the shipped executable lays out a real document, assembles `Zenith Workspace.app`, ad-hoc
+signs it, and publishes it as a downloadable Actions artifact. All three jobs are green with
+zero compiler warnings: policy checks, Linux (Swift 6.2) and macOS 27 (Xcode 27), with `37/37`
+layout self-test checks on both platforms and `27/27` metric-independent checks against real
+CoreText measurement.
+
+What the app does today: paginated US Letter sheets drawn by our own engine, caret and
+selection, typing, Return, Tab, arrows, Home/End, ⌘A ⌘C ⌘X ⌘V ⌘Z ⇧⌘Z, ⌘B and ⌘I with Word's
+any-not-bold rule, and zoom that scales the drawing rather than re-laying out. Text flows onto
+further sheets under widow/orphan and keep-with-next control.
+
+What it does **not** do yet: open or save `.docx` (those menu items are disabled, not stubbed),
+input-method composition, colour, ruler, styles gallery, find and replace, tables, images,
+headers and footers on screen, and the assistant. The ZIP and DEFLATE layer underneath
+`.docx` is written and green — see below.
 See the status block in [`docs/05-ROADMAP.md`](docs/05-ROADMAP.md) for exactly what was built
 and what was deferred, and [`docs/07-OPEN-QUESTIONS.md`](docs/07-OPEN-QUESTIONS.md) §E for the
 gaps discovered while building it.
@@ -125,12 +136,12 @@ Requires macOS 27 and Xcode 27, or any Swift 6.0+ toolchain for the cross-platfo
 ```sh
 swift build                          # everything
 swift test --parallel                # CoreKit, LayoutKit and EditorKit suites
-swift run Galley selftest            # the layout harness; exits 1 on any failed check
-swift run Galley layout --verbose    # lay out the sample document and print every line
-swift run Galley providers           # what AI is compiled in, and whether it is usable
+swift run ZenithTool selftest        # the layout harness; exits 1 on any failed check
+swift run ZenithTool layout --verbose # lay out the sample document and print every line
+swift run ZenithTool providers       # what AI is compiled in, and whether it is usable
 ```
 
-`Galley selftest --measurer coretext` runs the same checks against real font metrics on macOS,
+`ZenithTool selftest --measurer coretext` runs the same checks against real font metrics on macOS,
 skipping the ones whose expected numbers were derived from the synthetic measurer. The synthetic
 run is the one that asserts arithmetic; the CoreText run is the one that proves the measurement
 backend works end to end. Both run in CI.

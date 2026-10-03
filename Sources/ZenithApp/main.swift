@@ -39,10 +39,10 @@ if ProcessInfo.processInfo.environment["ZENITH_HEADLESS"] != nil {
         }
     }
 
-    print("Zenith headless smoke test")
+    print("Zenith Workspace headless smoke test")
 
     let document = WelcomeDocument.make()
-    let controller = DocumentController(document: document, authorName: "Zenith CI")
+    let controller = DocumentController(document: document, authorName: "Zenith Workspace CI")
     let snapshot = controller.snapshot
     let index = controller.textIndex
 
@@ -107,10 +107,10 @@ if ProcessInfo.processInfo.environment["ZENITH_HEADLESS"] != nil {
     expect(controller.textIndex.totalUTF16 == before, "undo restored the previous length")
 
     if failures.isEmpty {
-        print("\nZenith headless smoke test: all checks passed")
+        print("\nZenith Workspace headless smoke test: all checks passed")
         exit(0)
     }
-    print("\nZenith headless smoke test: \(failures.count) failure(s)")
+    print("\nZenith Workspace headless smoke test: \(failures.count) failure(s)")
     for failure in failures { print("  - \(failure)") }
     exit(1)
 }
@@ -132,15 +132,15 @@ application.run()
 // depends on it.
 print(
     """
-    Zenith is a macOS application and needs AppKit to run.
+    Zenith Workspace is a macOS application and needs AppKit to run.
 
     This binary was built on a platform without it, so there is no window to show.
     The headless harness — the layout engine's self-test and the command-line
-    layout report — lives in the `Galley` executable instead (that target is
-    renamed in the same pass that renames the rest of the project):
+    layout report — is a separate executable with no window, so it runs on a
+    machine with no display:
 
-        swift run Galley selftest
-        swift run Galley layout
+        swift run ZenithTool selftest
+        swift run ZenithTool layout
     """
 )
 

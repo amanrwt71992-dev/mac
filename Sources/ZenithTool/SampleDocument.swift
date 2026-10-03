@@ -22,10 +22,10 @@ enum SampleDocument {
     /// A multi-page document with headings, body text, a list-like run of
     /// paragraphs sharing a style, a manual page break and a manual line break.
     static func make(widthPoints: Double = 468) -> DocumentModel {
-        var builder = DocumentBuilder(author: "Galley harness")
+        var builder = DocumentBuilder(author: "Zenith Workspace harness")
         builder.setTextAreaWidth(widthPoints)
 
-        builder.heading("Galley", level: 1)
+        builder.heading("Zenith Workspace", level: 1)
         builder.paragraph(
             "A native Mac word processor. The document model is OOXML, the layout engine is ours, "
                 + "and the assistant runs on this Mac unless you tell it otherwise.",
@@ -99,7 +99,7 @@ enum SampleDocument {
         styles: StyleTable? = SampleDocument.flatStyles,
         configure: (inout DocumentBuilder) -> Void
     ) -> DocumentModel {
-        var builder = DocumentBuilder(author: "Galley harness", styles: styles)
+        var builder = DocumentBuilder(author: "Zenith Workspace harness", styles: styles)
         // Letter is 612 × 792 pt. Margins of 72 pt left and right leave the
         // requested width; top and bottom margins are set so the remainder is
         // exactly the requested height.

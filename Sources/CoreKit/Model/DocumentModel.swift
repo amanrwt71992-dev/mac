@@ -100,7 +100,7 @@ public struct DocumentModel: Hashable, Sendable {
     /// depending on locale, Normal margins, Calibri 11, one empty paragraph.
     public static func blank(
         regionUsesLetter: Bool = true,
-        author: String = "Galley"
+        author: String = "Zenith Workspace"
     ) -> DocumentModel {
         var nodeIDs = NodeIDState()
         let sectionID = nodeIDs.makeID()
@@ -1441,7 +1441,7 @@ public struct AppProperties: Hashable, Sendable {
     public var applicationVersion: String
 
     public init(
-        application: String = "Galley",
+        application: String = "Zenith Workspace",
         appVersion: String = "0.1",
         template: String = "Normal.dotm",
         company: String? = nil,

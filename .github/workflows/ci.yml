@@ -33,7 +33,7 @@ permissions:
 
 env:
   # Deterministic build banners, so a binary can be tied to a commit.
-  GALLEY_REVISION: ${{ github.sha }}
+  ZENITH_REVISION: ${{ github.sha }}
   SOURCE_DATE_EPOCH: "0"
 
 jobs:
@@ -77,8 +77,8 @@ jobs:
           # Nothing may import EditorKit or the app target: the dependency flow
           # is strictly downward.
           for dir in Sources/CoreKit Sources/LayoutKit Sources/IntelligenceKit Sources/OOXMLKit; do
-            if grep -rnE "^[[:space:]]*import[[:space:]]+(EditorKit|GalleyApp)" "$dir" 2>/dev/null; then
-              echo "::error::$dir must not import EditorKit or GalleyApp"
+            if grep -rnE "^[[:space:]]*import[[:space:]]+(EditorKit|ZenithTool)" "$dir" 2>/dev/null; then
+              echo "::error::$dir must not import EditorKit or ZenithTool"
               fail=1
             fi
           done
@@ -94,7 +94,7 @@ jobs:
           # headless: that is what makes the layout engine testable on a runner
           # with no window server, and what lets the Linux job type-check most of
           # the codebase in two minutes instead of three on a Mac.
-          for dir in Sources/CoreKit Sources/LayoutKit Sources/IntelligenceKit Sources/EditorKit Sources/GalleyApp Sources/OOXMLKit; do
+          for dir in Sources/CoreKit Sources/LayoutKit Sources/IntelligenceKit Sources/EditorKit Sources/ZenithTool Sources/OOXMLKit; do
             if grep -rnE "^[[:space:]]*import[[:space:]]+(AppKit|SwiftUI|UIKit)" "$dir" 2>/dev/null; then
               echo "::error::$dir must not import AppKit, SwiftUI or UIKit - only ZenithApp draws anything"
               fail=1
@@ -106,8 +106,35 @@ jobs:
             fail=1
           fi
 
-          if grep -rnE "^[[:space:]]*import[[:space:]]+GalleyApp" Sources 2>/dev/null; then
-            echo "::error::nothing may import GalleyApp"
+          if grep -rnE "^[[:space:]]*import[[:space:]]+ZenithTool" Sources 2>/dev/null; then
+            echo "::error::nothing may import ZenithTool"
+            fail=1
+          fi
+
+          # The product was renamed on 2026-10-03. Docs may keep the old name as
+          # history; code, tests and the manifest may not, or a half-finished
+          # rename starts looking intentional. This is the check that stops it
+          # creeping back in a later commit.
+          #
+          # Note the two splits, both of which are about this check matching
+          # itself.
+          #
+          # Code, tests, tools and the manifest are grepped for the bare old name
+          # in any case: none of them contain this text, so there is nothing to
+          # exclude.
+          #
+          # This workflow is grepped only for the forms that would be real usage —
+          # a target name, an environment variable, a `swift run`, a product name
+          # — and each is written with a bracketed first letter, so the pattern
+          # matches the real string but not its own source text. That is the only
+          # way to grep a file for a pattern the grep itself contains, and it means
+          # the old name must not be spelled out in this comment either.
+          if grep -rniE "galley" Sources Tests Tools Package.swift 2>/dev/null; then
+            echo "::error::the product is Zenith Workspace - the previous working name must not appear in code, tests, tools or the manifest"
+            fail=1
+          fi
+          if grep -rnE "G[a]lleyApp|G[A]LLEY_|run G[a]lley|name: .G[a]lley." .github 2>/dev/null; then
+            echo "::error::the workflow still refers to the previous target, environment variable or product name"
             fail=1
           fi
 
@@ -264,10 +291,10 @@ jobs:
                   if os.path.isdir(candidate):
                       if not any(f.endswith(".swift") for _, _, files in os.walk(candidate) for f in files):
                           missing.append(candidate)
-          # GalleyApp is declared with an explicit path.
-          if os.path.isdir("Sources/GalleyApp") and not any(
-                  f.endswith(".swift") for f in os.listdir("Sources/GalleyApp")):
-              missing.append("Sources/GalleyApp")
+          # ZenithTool is declared with an explicit path.
+          if os.path.isdir("Sources/ZenithTool") and not any(
+                  f.endswith(".swift") for f in os.listdir("Sources/ZenithTool")):
+              missing.append("Sources/ZenithTool")
           if missing:
               print("::error::target directories with no Swift sources: %s" % ", ".join(sorted(set(missing))))
               sys.exit(1)
@@ -411,7 +438,7 @@ jobs:
       - name: Layout self-test
         run: |
           set +e
-          swift run Galley selftest 2>&1 | tee selftest.log
+          swift run ZenithTool selftest 2>&1 | tee selftest.log
           status=${PIPESTATUS[0]}
           set -e
           annotate() {
@@ -436,9 +463,9 @@ jobs:
         if: steps.build.outcome == 'success'
         run: |
           set -uo pipefail
-          swift run Galley version || true
-          swift run Galley layout 2>&1 | tee layout.log
-          swift run Galley providers || true
+          swift run ZenithTool version || true
+          swift run ZenithTool layout 2>&1 | tee layout.log
+          swift run ZenithTool providers || true
 
       - name: Upload logs on failure
         if: failure()
@@ -575,7 +602,7 @@ jobs:
       - name: Layout self-test with the CoreText measurer
         run: |
           set +e
-          swift run Galley selftest --measurer coretext 2>&1 | tee selftest-coretext.log
+          swift run ZenithTool selftest --measurer coretext 2>&1 | tee selftest-coretext.log
           status=${PIPESTATUS[0]}
           set -e
           if [ "$status" -ne 0 ]; then
@@ -598,7 +625,7 @@ jobs:
       - name: Layout self-test with the synthetic measurer
         run: |
           set +e
-          swift run Galley selftest 2>&1 | tee selftest-fixed.log
+          swift run ZenithTool selftest 2>&1 | tee selftest-fixed.log
           status=${PIPESTATUS[0]}
           set -e
           if [ "$status" -ne 0 ]; then
@@ -622,9 +649,9 @@ jobs:
         if: steps.build.outcome == 'success'
         run: |
           set -uo pipefail
-          swift run Galley layout --measurer coretext 2>&1 | tee layout-coretext.log
-          swift run Galley layout 2>&1 | tee layout.log
-          swift run Galley providers || true
+          swift run ZenithTool layout --measurer coretext 2>&1 | tee layout-coretext.log
+          swift run ZenithTool layout 2>&1 | tee layout.log
+          swift run ZenithTool providers || true
           echo "CoreText and synthetic page/line counts are recorded for comparison."
 
       - name: Build the application (release)
@@ -635,7 +662,7 @@ jobs:
         run: |
           set +e
           set -o pipefail
-          swift build -c release --product Zenith 2>&1 | tee release-build.log
+          swift build -c release --product ZenithWorkspace 2>&1 | tee release-build.log
           status=${PIPESTATUS[0]}
           set -e
           echo "release build exit status: $status"
@@ -661,7 +688,7 @@ jobs:
         run: |
           set +e
           set -o pipefail
-          ZENITH_HEADLESS=1 .build/release/Zenith 2>&1 | tee zenith-headless.log
+          ZENITH_HEADLESS=1 .build/release/ZenithWorkspace 2>&1 | tee zenith-headless.log
           status=${PIPESTATUS[0]}
           set -e
           if [ "$status" -ne 0 ]; then
@@ -694,7 +721,7 @@ jobs:
         if: steps.build.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
-          name: Zenith-macOS-arm64
+          name: ZenithWorkspace-macOS-arm64
           path: |
             dist/Zenith-app.zip
             dist/Zenith-app.zip.sha256

@@ -8,7 +8,8 @@ M3, **D** can wait.
 ## A. Blocks the first commit
 
 ### A1. Product name
-Shortlist and evidence in `06-LEGAL-AND-IP.md` §1. Recommendation: **Galley** (runner-up
+Shortlist and evidence in `06-LEGAL-AND-IP.md` §1. **Decided 2026-10-03: `Zenith Workspace`**,
+not cleared — see §1.1 for the trademark risk that remains. Superseded recommendation: **Galley** (runner-up
 **Incipit**). `Quire` is rejected — Getty holds `Quire™` for an open-source publishing tool.
 
 Needed because it determines: GitHub org, repo name, bundle identifier, our own UTI,
@@ -317,7 +318,7 @@ large documents this way.
 
 | # | Question | Recommendation |
 |---|---|---|
-| A1 | Name | **Galley** (runner-up Incipit); never Quire |
+| A1 | Name | **Zenith Workspace** (2026-10-03, not cleared — see 06 §1.1). Superseded: Galley. Never Quire or Continuum |
 | A2 | Repo | New private org repo once named; keep this branch as the working branch meanwhile |
 | A3 | Licence | Apache-2.0 for engine packages |
 | A4 | Distribution | Sandboxed from day one; MAS primary + Developer-ID `.dmg` secondary |

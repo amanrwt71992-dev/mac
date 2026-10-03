@@ -4,7 +4,7 @@ import LayoutKit
 import EditorKit
 import IntelligenceKit
 
-// MARK: - Galley command-line entry point
+// MARK: - ZenithTool command-line entry point
 
 // The shipped product is a Mac app, and `EditorKit` grows its AppKit surface in
 // M1. What lives here in M0 is the layout harness: a way to run the whole
@@ -20,14 +20,14 @@ let arguments = Array(CommandLine.arguments.dropFirst())
 
 func usage() -> String {
     """
-    Galley \(GalleyVersion.current) — layout and editing harness
+    Zenith Workspace \(ToolVersion.current) — layout and editing harness
 
     Usage:
-      galley selftest                 run every applicable check; exit 1 on failure
-      galley layout [--pages N]       lay out a sample document and report pages/lines
-      galley providers                list the AI providers compiled into this build
-      galley version                  print the version
-      galley help                     this text
+      ZenithTool selftest                 run every applicable check; exit 1 on failure
+      ZenithTool layout [--pages N]       lay out a sample document and report pages/lines
+      ZenithTool providers                list the AI providers compiled into this build
+      ZenithTool version                  print the version
+      ZenithTool help                     this text
 
     Options:
       --measurer coretext|fixed       measurement backend (default: fixed, for
@@ -95,8 +95,8 @@ let command = positional.first ?? "help"
 
 switch command {
 case "version", "--version":
-    print("Galley \(GalleyVersion.current)")
-    print("build date: \(GalleyVersion.buildDate)")
+    print("Zenith Workspace \(ToolVersion.current)")
+    print("build date: \(ToolVersion.buildDate)")
     print("layout backend: \(measurerName)")
 
 case "help", "--help", "-h":
@@ -162,9 +162,9 @@ case "selftest":
     print("\(applicable.count - failures.count)/\(applicable.count) checks passed"
         + (skipped > 0 ? " (\(skipped) skipped: they assert synthetic-metric arithmetic)" : ""))
     if failures.isEmpty {
-        print("Galley \(GalleyVersion.current) selftest: PASS")
+        print("Zenith Workspace \(ToolVersion.current) selftest: PASS")
     } else {
-        print("Galley \(GalleyVersion.current) selftest: FAIL")
+        print("Zenith Workspace \(ToolVersion.current) selftest: FAIL")
         exit(1)
     }
 

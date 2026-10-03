@@ -1,6 +1,6 @@
 // swift-tools-version:6.0
 //
-//  Galley — a native Mac word processor.
+//  Zenith Workspace — a native Mac word processor.
 //
 //  Target layering is load-bearing, not cosmetic. The dependency flow is strictly
 //  downward and CI enforces it (see .github/workflows/ci.yml):
@@ -17,16 +17,16 @@
 //                         import LayoutKit: the snapshot is derived state owned
 //                         by the controller, not by the editor.
 //      ZenithApp          the application. AppKit lives here and nowhere else.
-//      GalleyApp          the headless harness: self-test, layout report,
-//                         providers. Named for the old product name; renamed in
-//                         the same pass that renames the rest of the project.
+//      ZenithTool         the headless harness: self-test, layout report,
+//                         providers. No window, so it runs on a machine with no
+//                         display — which is what CI has.
 //
-//  Nothing may import EditorKit or GalleyApp.
+//  Nothing may import EditorKit, ZenithTool or ZenithApp.
 
 import PackageDescription
 
 let package = Package(
-    name: "Zenith",
+    name: "ZenithWorkspace",
     platforms: [
         .macOS("27.0")
     ],
@@ -36,8 +36,8 @@ let package = Package(
         .library(name: "IntelligenceKit", targets: ["IntelligenceKit"]),
         .library(name: "LayoutKit", targets: ["LayoutKit"]),
         .library(name: "EditorKit", targets: ["EditorKit"]),
-        .executable(name: "Galley", targets: ["GalleyApp"]),
-        .executable(name: "Zenith", targets: ["ZenithApp"]),
+        .executable(name: "ZenithTool", targets: ["ZenithTool"]),
+        .executable(name: "ZenithWorkspace", targets: ["ZenithApp"]),
     ],
     targets: [
         .target(name: "CoreKit"),
@@ -77,9 +77,9 @@ let package = Package(
         ),
 
         .executableTarget(
-            name: "GalleyApp",
+            name: "ZenithTool",
             dependencies: ["CoreKit", "LayoutKit", "EditorKit", "IntelligenceKit"],
-            path: "Sources/GalleyApp"
+            path: "Sources/ZenithTool"
         ),
 
         // The application. This is the only target allowed to import AppKit: it

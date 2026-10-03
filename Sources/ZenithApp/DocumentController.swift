@@ -109,12 +109,12 @@ enum WelcomeDocument {
         // header and footer, leaving a 6.5 × 9 in text area of 468 × 648 pt. It is
         // not restated here so that there is one place that decides the default
         // page setup.
-        var builder = DocumentBuilder(author: "Zenith")
+        var builder = DocumentBuilder(author: "Zenith Workspace")
 
-        builder.heading("Zenith", level: 1)
+        builder.heading("Zenith Workspace", level: 1)
         builder.paragraph(
             "A native word processor for the Mac. Type anywhere on this page — the "
-                + "text you are looking at is laid out by Zenith's own pagination "
+                + "text you are looking at is laid out by Zenith Workspace's own pagination "
                 + "engine, measured with CoreText, not by a web browser and not by "
                 + "Apple's text system.",
             style: "Normal"

@@ -38,10 +38,31 @@ Availability was checked live: GitHub username (404 = free), npm, and DNS A-reco
 | **Foolscap** | A traditional paper size (~13.5″ × 17″) | `foolscapdoc` — | — | `foolscap.app` **taken** | some uses | ⚠️ weaker |
 | **Palimpsest** | A manuscript page scraped clean and reused — perfect metaphor for tracked changes | `palimpsestdoc` free | — | — | a blockchain explorer uses it (unrelated field) | ✅ evocative but long |
 
-**Recommendation: `Galley`.** It is a real printing term, unmistakably about documents,
+**Recommendation — SUPERSEDED 2026-10-03, see §1.1: `Galley`.** It is a real printing term, unmistakably about documents,
 two syllables, easy to say and spell, not used by any software product I could find, and the
 `galleydoc` GitHub handle and `galleydoc.app` domain both appear free. Runner-up: `Incipit`
 if we want something more distinctive and less likely to collide.
+
+### 1.1 Decision — 2026-10-03: `Zenith Workspace`
+
+The name above was never adopted. Three candidates were considered after it and the
+evidence for each is recorded here, because the reasoning is the part worth keeping.
+
+| Candidate | Verdict | Why |
+|---|---|---|
+| ~~`Continuum`~~ | **REJECT** | Microsoft Corporation, US Reg. **5355493**, filed 2015-04-01, registered 2017-12-12, status **Registered / Active**, International Class **009** ("operating system software; computer software…"). Still listed in Microsoft's own published trademark list (February 2024). Naming a Word competitor with the direct competitor's live software mark is the worst available choice. Also live: Continuum Works Inc., Continuum LLC. |
+| ~~`Zenith`~~ (bare) | **REJECT for release** | **Zenith Electronics LLC** — LG's US research subsidiary, zenith.com, self-described "technology development and **licensing**" company, i.e. a business whose product is enforcing IP. Holds multiple **live Class 009** registrations: Reg. 0404673 (filed 1943, Class Status 6 – Active), plus live registrations running to **2030, 2032 and 2033**. "ZENITH Z" (73362824) covers *"Computer Software — Namely, Programs Recorded on Magnetic Discs."* Also holds "OPEN WEBOS" (operating system software) and "CONNECT SDK". Filed **"PROSPECTUS AI"** on **2026-06-05** in Class 009 for downloadable application software — actively trademarking in AI software. Separately: Zenith (LVMH) luxury watches, and Zenith Bank. |
+| **`Zenith Workspace`** | **ADOPTED as working name — not cleared** | The composite form changes the commercial impression and is a different mark from the bare word, which materially lowers the risk. It is not zero: Zenith Electronics' Class 009 registrations are live and its owner is a licensing business. **"Zenith Workspaces"** (plural) exists on Google Play — ShareDesk Global Inc., a desk-booking app — different goods and services, low conflict. |
+
+**What this means operationally.** `Zenith Workspace` is safe enough to build under and to
+show people. It is **not** safe enough to sell under without a trademark attorney's opinion,
+a proper clearance search in every target market (not only the USPTO), and ideally a filing.
+The bundle identifier is the part that is expensive to change later — it is baked into the
+user's preferences directory, Keychain items and any sandbox container — so it is settled
+early as `dev.zenithworkspace.app` and should be flipped to reverse-DNS under a real domain
+**before** the first public release, never after.
+
+Nothing in this document is legal advice.
 
 Whatever we pick:
 - Register the GitHub org **and** the domain immediately, before announcing anything.
@@ -55,12 +76,12 @@ Whatever we pick:
 
 | Thing | Value | Note |
 |---|---|---|
-| App bundle id | `com.<ourdomain>.galley` | our own namespace |
-| Helper/CLI bundle id | `com.<ourdomain>.galley.cli` | |
-| App Group | `group.com.<ourdomain>.galley` | |
+| App bundle id | `dev.zenithworkspace.app` (provisional, see §1.1) | flip to reverse-DNS under a real domain before first release |
+| Helper/CLI bundle id | `dev.zenithworkspace.tool` | the headless harness, if it is ever shipped inside the bundle |
+| App Group | `group.dev.zenithworkspace` | |
 | **UTI we declare** | `org.openxmlformats.wordprocessingml.document` | **mandated by the standard — every implementation uses it.** We declare *conformance* / import, not ownership |
 | MIME type | `application/vnd.openxmlformats.wordprocessingml.document` | standard-mandated |
-| Our own UTI | `com.<ourdomain>.galley.document`, conforming to the above | so Finder/Open-With behaves, without inventing a format nobody can read |
+| Our own UTI | `dev.zenithworkspace.document`, conforming to the above | so Finder/Open-With behaves, without inventing a format nobody can read |
 | OOXML namespaces | `http://schemas.openxmlformats.org/wordprocessingml/2006/main`, `.../drawingml/2006/main`, `.../officeDocument/2006/relationships`, `.../package/2006/relationships`, `http://schemas.openxmlformats.org/officeDocument/2006/math`, `http://schemas.openxmlformats.org/officeDocument/2006/bibliography` | standard-mandated literal strings; **must** be used verbatim or files will not open in Word |
 
 Using these is not trademark use — they are identifiers defined by ECMA-376/ISO 29500 that
@@ -267,7 +288,7 @@ The current repo is `amanrwt71992-dev/mac`, private, one commit, no licence.
 
 Options:
 - **Keep it** as a private incubation repo and rename later. Cheapest, no churn.
-- **Create a new repo** under a new GitHub org named after the product (e.g. `galleydoc/galley`)
+- **Create a new repo** under a new GitHub org named after the product (e.g. `zenithworkspace/app`). Note that GitHub orgs cannot be created through the API — `POST /orgs` returns 404 — so this has to be done in the web UI.
   once the name is cleared. Cleaner history, and the org name is reserved.
 
 Recommendation: decide the name first (it determines the org), then create the org + repo,

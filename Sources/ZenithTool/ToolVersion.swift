@@ -1,7 +1,7 @@
 import Foundation
 
 /// Version metadata for the harness and, later, for the app's About panel.
-public enum GalleyVersion {
+public enum ToolVersion {
 
     /// Milestone 0. The numbering follows docs/05-ROADMAP.md: v1.0 is M0–M3.
     public static let current = "0.0.1-m0"
@@ -12,7 +12,7 @@ public enum GalleyVersion {
     /// moment anyone commits, and a stale revision in a bug report is worse than
     /// no revision at all.
     public static var revision: String {
-        ProcessInfo.processInfo.environment["GALLEY_REVISION"] ?? "unknown"
+        ProcessInfo.processInfo.environment["ZENITH_REVISION"] ?? "unknown"
     }
 
     public static var buildDate: String {
@@ -24,6 +24,6 @@ public enum GalleyVersion {
 
     /// A one-line banner suitable for a crash report or a support email.
     public static var banner: String {
-        "Galley \(current) (\(revision))"
+        "Zenith Workspace \(current) (\(revision))"
     }
 }

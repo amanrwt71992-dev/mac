@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Assembles Zenith.app from a SwiftPM release build.
+# Assembles "Zenith Workspace.app" from a SwiftPM release build.
 #
 # SwiftPM produces a bare Mach-O executable, which macOS will not present as an
 # application: no Dock icon, no menu bar, no double-click. The bundle layout and
@@ -21,24 +21,26 @@ set -euo pipefail
 BUILD_DIR="${1:-.build/release}"
 OUT_DIR="${2:-dist}"
 VERSION="${3:-0.1.0}"
-REVISION="${ZENITH_REVISION:-${GALLEY_REVISION:-unknown}}"
+REVISION="${ZENITH_REVISION:-unknown}"
 
-EXECUTABLE="$BUILD_DIR/Zenith"
+EXECUTABLE="$BUILD_DIR/ZenithWorkspace"
 if [[ ! -f "$EXECUTABLE" ]]; then
   echo "::error::no executable at $EXECUTABLE — did the release build succeed?" >&2
   exit 1
 fi
 
-APP="$OUT_DIR/Zenith.app"
+APP="$OUT_DIR/Zenith Workspace.app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 
-cp "$EXECUTABLE" "$APP/Contents/MacOS/Zenith"
+cp "$EXECUTABLE" "$APP/Contents/MacOS/ZenithWorkspace"
 printf 'APPL????' > "$APP/Contents/PkgInfo"
 
-# The bundle identifier is provisional and must change with the final product
-# name: it is baked into the user's preferences directory, their Keychain items
-# and any sandbox container, so renaming it later orphans all of them.
+# The bundle identifier is baked into the user's preferences directory, their
+# Keychain items and any sandbox container, so renaming it later orphans all of
+# them. It is settled here as dev.zenithworkspace.app; if a domain is ever
+# acquired it should be flipped to reverse-DNS under that domain *before* the
+# first public release and never after.
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -47,15 +49,15 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>CFBundleDevelopmentRegion</key>
     <string>en</string>
     <key>CFBundleDisplayName</key>
-    <string>Zenith</string>
+    <string>Zenith Workspace</string>
     <key>CFBundleExecutable</key>
-    <string>Zenith</string>
+    <string>ZenithWorkspace</string>
     <key>CFBundleIdentifier</key>
-    <string>dev.zenith.editor</string>
+    <string>dev.zenithworkspace.app</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
-    <string>Zenith</string>
+    <string>Zenith Workspace</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
@@ -98,9 +100,9 @@ codesign --verify --verbose=2 "$APP" || {
 # to be linked statically into the executable, and this is the check that catches
 # it if that ever changes.
 echo "--- linked libraries ---"
-otool -L "$APP/Contents/MacOS/Zenith" | sed 's/^/  /'
+otool -L "$APP/Contents/MacOS/ZenithWorkspace" | sed 's/^/  /'
 
-if otool -L "$APP/Contents/MacOS/Zenith" | grep -q '\.build'; then
+if otool -L "$APP/Contents/MacOS/ZenithWorkspace" | grep -q '\.build'; then
   echo "::error::the app links against libraries inside .build and will not run elsewhere" >&2
   exit 1
 fi

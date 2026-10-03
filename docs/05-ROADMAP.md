@@ -57,7 +57,7 @@ zero compiler warnings.
 
 **What the milestone actually became.** The plan above describes a *visible* M0: a window, a
 ruler, IME, Writing Tools in the context menu. What shipped instead is the engine underneath all
-of that, verified by a headless harness (`swift run Galley selftest`, `layout`, `providers`).
+of that, verified by a headless harness (`swift run ZenithTool selftest`, `layout`, `providers`).
 That was a deliberate substitution, not a shortfall. Two reasons:
 
 1. The exit question at this stage is "does the engine lay a document out correctly", and that
@@ -79,7 +79,7 @@ below was descoped to make room for them.
 | `LayoutKit` | `StyleResolver` (cascade → concrete numbers), greedy `LineBreaker`, `Paginator`, `LayoutSnapshot`, `CoreTextMeasurer` behind `#if canImport(CoreText)`, `FixedWidthMeasurer` for tests and Linux |
 | `EditorKit` | `EditorState`: typing, Return/Backspace/fn-Delete, cross-paragraph deletion, character and paragraph formatting, tracked changes. Depends on `CoreKit` alone — CI fails if it imports `LayoutKit` |
 | `IntelligenceKit` | `AIProvider` protocol, task taxonomy with an honest Writing Tools mapping, redaction policy, `AssistantMutationBuilder`, provider catalogue (Apple Intelligence + OpenAI-compatible + Anthropic + local Ollama) |
-| `GalleyApp` | headless harness: `selftest`, `layout`, `providers`, `version` |
+| `ZenithTool` | headless harness: `selftest`, `layout`, `providers`, `version` |
 
 Fidelity rules that are implemented and tested, not merely documented: `nil` vs explicit-off,
 `w:numId val="0"` cancellation, `w:tab val="clear"` removing inherited stops, the four `w:rFonts`
@@ -145,7 +145,7 @@ Still to do in M0.5:
 | Ruler | |
 | Performance contract on `xcode-27-xlarge` | needs a 300-page fixture |
 | Font bundling | see F6 — the substitution policy is currently inert |
-| Full Galley → product rename | mechanical, ~48 files, done once the name is settled |
+| ~~Full Galley → product rename~~ | **done 2026-10-03** — `Zenith Workspace`, package `ZenithWorkspace`, harness `ZenithTool` |
 
 Slice 2 started the same day: `OOXMLKit` with a ZIP reader and a DEFLATE decoder,
 green on Linux and macOS against archives produced by Python. The container is
