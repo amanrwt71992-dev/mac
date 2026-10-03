@@ -135,9 +135,24 @@ public enum Inflate {
         /// Builds the code from a length per symbol.
         ///
         /// Returns the number of unused codes, matching `puff`'s convention:
-        /// negative means over-subscribed (an error), positive means incomplete
-        /// (an error except in the two shapes callers explicitly allow), zero
+        /// negative would mean over-subscribed, positive means incomplete, zero
         /// means exactly complete.
+        ///
+        /// Only over-subscription is thrown here. **Incompleteness is reported,
+        /// never rejected**, because whether it is acceptable depends entirely on
+        /// which table is being built and only the caller knows that:
+        ///
+        /// - the fixed distance table assigns 5 bits to 30 of the 32 possible
+        ///   codes and is *always* incomplete — rejecting it means no fixed block
+        ///   can ever decode, which is most small files;
+        /// - the fixed literal/length table is complete;
+        /// - a dynamic code-length table must be complete;
+        /// - a dynamic literal/length or distance table may be incomplete only in
+        ///   the degenerate single-symbol case, which zlib emits constantly for
+        ///   data with no long back-references.
+        ///
+        /// A builder that decided this itself would have to pick one rule and be
+        /// wrong for the other three.
         mutating func build(lengths: [Int]) throws -> Int {
             count = [Int](repeating: 0, count: Inflate.maxBits + 1)
             for length in lengths { count[length] += 1 }
@@ -154,13 +169,6 @@ public enum Inflate {
                 left -= count[length]
                 if left < 0 { throw Error.overSubscribedCode }
             }
-            // An incomplete code is only acceptable when it is the degenerate
-            // single-symbol case, which is exactly when count[1] is non-zero
-            // while everything is still over-subscribed-free.
-            if left > 0 && (count[0] == 0 || count[1] == 0) {
-                throw Error.incompleteCode
-            }
-
             var offsets = [Int](repeating: 0, count: Inflate.maxBits + 2)
             offsets[1] = 0
             for length in 1 ..< Inflate.maxBits {
@@ -281,10 +289,13 @@ public enum Inflate {
             for symbol in 144 ..< 256 { lengths[symbol] = 9 }
             for symbol in 256 ..< 280 { lengths[symbol] = 7 }
             for symbol in 280 ..< 288 { lengths[symbol] = 8 }
+            // Both return values are deliberately discarded. The fixed
+            // literal/length table is complete; the fixed distance table is not —
+            // 30 codes of 5 bits leaves two unused — and that is specified
+            // behaviour, not corruption.
             var literalLength = Code()
             _ = try literalLength.build(lengths: lengths)
 
-            // Every distance symbol has length 5 in the fixed table.
             let distanceLengths = [Int](repeating: 5, count: 30)
             var distance = Code()
             _ = try distance.build(lengths: distanceLengths)
@@ -303,7 +314,12 @@ public enum Inflate {
                 codeLengths[Inflate.codeLengthOrder[index]] = try bits(3)
             }
             var codeLengthCode = Code()
-            _ = try codeLengthCode.build(lengths: codeLengths)
+            // The code-length alphabet is the one dynamic table that must be
+            // exactly complete: it describes the other two, so a gap in it is not
+            // a degenerate case, it is a corrupt stream.
+            if try codeLengthCode.build(lengths: codeLengths) != 0 {
+                throw Error.incompleteCode
+            }
 
             let total = literalCount + distanceCount
             var lengths = [Int](repeating: 0, count: total)
