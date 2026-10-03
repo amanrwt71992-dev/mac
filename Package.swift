@@ -8,7 +8,9 @@
 //      CoreKit            pure Swift + Foundation. No AppKit, no CoreText, no UIKit.
 //                         Compiles and unit-tests on Linux, which is what lets us
 //                         type-check most of the codebase in ~3 minutes.
-//      OOXMLKit           (M1) adds ZIPFoundation. Still cross-platform.
+//      OOXMLKit           CoreKit only. The ZIP container and the OOXML
+//                         reader/writer. No dependencies, no platform guards, so
+//                         the Linux job covers it too.
 //      IntelligenceKit    Foundation + FoundationModels behind `canImport`.
 //      LayoutKit          CoreText. macOS only; guarded so Linux still builds.
 //      EditorKit          CoreKit only. Editing, selection and undo. It may not
@@ -30,6 +32,7 @@ let package = Package(
     ],
     products: [
         .library(name: "CoreKit", targets: ["CoreKit"]),
+        .library(name: "OOXMLKit", targets: ["OOXMLKit"]),
         .library(name: "IntelligenceKit", targets: ["IntelligenceKit"]),
         .library(name: "LayoutKit", targets: ["LayoutKit"]),
         .library(name: "EditorKit", targets: ["EditorKit"]),
@@ -38,6 +41,22 @@ let package = Package(
     ],
     targets: [
         .target(name: "CoreKit"),
+
+        // The file format. ZIP container and OOXML reader/writer.
+        //
+        // Deliberately free of platform conditionals and of external dependencies.
+        // `Compression` is Apple-only, and guarding the codec behind it would mean
+        // the Linux job never type-checks a line of it — which is the only job that
+        // reports back in two minutes instead of five. Writing the DEFLATE decoder
+        // here instead buys that feedback loop, plus error messages that say which
+        // block failed, plus the control a byte-preserving save needs.
+        //
+        // Depends on CoreKit and nothing else: reading a file must not require the
+        // layout engine, and laying out a document must not require a file.
+        .target(
+            name: "OOXMLKit",
+            dependencies: ["CoreKit"]
+        ),
 
         .target(
             name: "IntelligenceKit",
@@ -81,6 +100,11 @@ let package = Package(
         .testTarget(
             name: "CoreKitTests",
             dependencies: ["CoreKit"]
+        ),
+
+        .testTarget(
+            name: "OOXMLKitTests",
+            dependencies: ["CoreKit", "OOXMLKit"]
         ),
 
         .testTarget(

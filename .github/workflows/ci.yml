@@ -68,12 +68,25 @@ jobs:
           # invalidation gets scattered across every editing path.
           check_absent Sources/EditorKit "LayoutKit, AppKit, UIKit or SwiftUI" "LayoutKit|AppKit|UIKit|SwiftUI|Carbon"
           check_absent Sources/IntelligenceKit "AppKit, CoreText, UIKit or SwiftUI" "AppKit|CoreText|UIKit|SwiftUI|Carbon"
+          # The file format has to stay platform-free. If the ZIP or OOXML code
+          # ever reaches for Compression or CoreFoundation, it stops being covered
+          # by the fast Linux job, and that job is the only one that reports in two
+          # minutes instead of five.
+          check_absent Sources/OOXMLKit "AppKit, CoreText, UIKit, SwiftUI or Compression" "AppKit|CoreText|UIKit|SwiftUI|Carbon|Compression"
 
           # Nothing may import EditorKit or the app target: the dependency flow
           # is strictly downward.
-          for dir in Sources/CoreKit Sources/LayoutKit Sources/IntelligenceKit; do
+          for dir in Sources/CoreKit Sources/LayoutKit Sources/IntelligenceKit Sources/OOXMLKit; do
             if grep -rnE "^[[:space:]]*import[[:space:]]+(EditorKit|GalleyApp)" "$dir" 2>/dev/null; then
               echo "::error::$dir must not import EditorKit or GalleyApp"
+              fail=1
+            fi
+          done
+          # OOXMLKit sits beside CoreKit, not above it: reading a file must not
+          # require the layout engine.
+          for dir in Sources/CoreKit Sources/LayoutKit Sources/IntelligenceKit Sources/EditorKit; do
+            if grep -rnE "^[[:space:]]*import[[:space:]]+OOXMLKit" "$dir" 2>/dev/null; then
+              echo "::error::$dir must not import OOXMLKit"
               fail=1
             fi
           done
@@ -81,7 +94,7 @@ jobs:
           # headless: that is what makes the layout engine testable on a runner
           # with no window server, and what lets the Linux job type-check most of
           # the codebase in two minutes instead of three on a Mac.
-          for dir in Sources/CoreKit Sources/LayoutKit Sources/IntelligenceKit Sources/EditorKit Sources/GalleyApp; do
+          for dir in Sources/CoreKit Sources/LayoutKit Sources/IntelligenceKit Sources/EditorKit Sources/GalleyApp Sources/OOXMLKit; do
             if grep -rnE "^[[:space:]]*import[[:space:]]+(AppKit|SwiftUI|UIKit)" "$dir" 2>/dev/null; then
               echo "::error::$dir must not import AppKit, SwiftUI or UIKit - only ZenithApp draws anything"
               fail=1
