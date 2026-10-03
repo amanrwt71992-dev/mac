@@ -35,6 +35,10 @@ env:
   # Deterministic build banners, so a binary can be tied to a commit.
   ZENITH_REVISION: ${{ github.sha }}
   SOURCE_DATE_EPOCH: "0"
+  # Defined once, here. Tools/make-app.sh and the packaging step below both read
+  # it, because the two of them spelling the bundle name independently is exactly
+  # how the packaging step came to look for a bundle that no longer existed.
+  ZENITH_APP_NAME: "Zenith Workspace"
 
 jobs:
   # ---------------------------------------------------------------------------
@@ -698,7 +702,7 @@ jobs:
           fi
           echo "application smoke test passed"
 
-      - name: Assemble Zenith.app
+      - name: Assemble the application bundle
         if: steps.build.outcome == 'success'
         run: |
           set -euo pipefail
@@ -710,11 +714,23 @@ jobs:
         run: |
           set -euo pipefail
           cd dist
+          bundle="$ZENITH_APP_NAME.app"
+          archive="ZenithWorkspace-macOS-arm64.zip"
+
+          # Fail with what was expected and what is actually there. `ditto` on a
+          # missing bundle reports a path that looks like a typo rather than a
+          # rename that went half-way, and the difference is several minutes of
+          # reading logs.
+          if [ ! -d "$bundle" ]; then
+            echo "::error title=Bundle not found::expected '$bundle' in dist/, found: $(ls -1 | paste -sd' ' -)"
+            exit 1
+          fi
+
           # ditto, not zip: `zip` drops the extended attributes and resource forks
           # that a signed bundle carries, and the result fails signature
           # verification on the machine that downloads it.
-          ditto -c -k --sequesterRsrc --keepParent Zenith.app Zenith-app.zip
-          shasum -a 256 Zenith-app.zip | tee Zenith-app.zip.sha256
+          ditto -c -k --sequesterRsrc --keepParent "$bundle" "$archive"
+          shasum -a 256 "$archive" | tee "$archive.sha256"
           ls -la
 
       - name: Upload the application
@@ -723,8 +739,8 @@ jobs:
         with:
           name: ZenithWorkspace-macOS-arm64
           path: |
-            dist/Zenith-app.zip
-            dist/Zenith-app.zip.sha256
+            dist/ZenithWorkspace-macOS-arm64.zip
+            dist/ZenithWorkspace-macOS-arm64.zip.sha256
           retention-days: 30
           if-no-files-found: error
 

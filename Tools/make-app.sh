@@ -23,17 +23,29 @@ OUT_DIR="${2:-dist}"
 VERSION="${3:-0.1.0}"
 REVISION="${ZENITH_REVISION:-unknown}"
 
-EXECUTABLE="$BUILD_DIR/ZenithWorkspace"
+# The human-readable product name and the Mach-O filename are different things
+# and must not be conflated. The bundle is "Zenith Workspace.app" because that is
+# what Finder, the Dock and the menu bar show; the executable inside it is
+# ZenithWorkspace with no space, because a space in an executable path is a
+# permanent source of quoting bugs in every script that ever touches it.
+#
+# Both are defined here and nowhere else. The packaging step in CI reads the same
+# variable, which is the fix for the drift that made it look for a bundle name
+# this script had already stopped producing.
+APP_NAME="${ZENITH_APP_NAME:-Zenith Workspace}"
+EXECUTABLE_NAME="ZenithWorkspace"
+
+EXECUTABLE="$BUILD_DIR/$EXECUTABLE_NAME"
 if [[ ! -f "$EXECUTABLE" ]]; then
   echo "::error::no executable at $EXECUTABLE — did the release build succeed?" >&2
   exit 1
 fi
 
-APP="$OUT_DIR/Zenith Workspace.app"
+APP="$OUT_DIR/$APP_NAME.app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 
-cp "$EXECUTABLE" "$APP/Contents/MacOS/ZenithWorkspace"
+cp "$EXECUTABLE" "$APP/Contents/MacOS/$EXECUTABLE_NAME"
 printf 'APPL????' > "$APP/Contents/PkgInfo"
 
 # The bundle identifier is baked into the user's preferences directory, their
@@ -49,15 +61,15 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>CFBundleDevelopmentRegion</key>
     <string>en</string>
     <key>CFBundleDisplayName</key>
-    <string>Zenith Workspace</string>
+    <string>$APP_NAME</string>
     <key>CFBundleExecutable</key>
-    <string>ZenithWorkspace</string>
+    <string>$EXECUTABLE_NAME</string>
     <key>CFBundleIdentifier</key>
     <string>dev.zenithworkspace.app</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
-    <string>Zenith Workspace</string>
+    <string>$APP_NAME</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
@@ -100,9 +112,9 @@ codesign --verify --verbose=2 "$APP" || {
 # to be linked statically into the executable, and this is the check that catches
 # it if that ever changes.
 echo "--- linked libraries ---"
-otool -L "$APP/Contents/MacOS/ZenithWorkspace" | sed 's/^/  /'
+otool -L "$APP/Contents/MacOS/$EXECUTABLE_NAME" | sed 's/^/  /'
 
-if otool -L "$APP/Contents/MacOS/ZenithWorkspace" | grep -q '\.build'; then
+if otool -L "$APP/Contents/MacOS/$EXECUTABLE_NAME" | grep -q '\.build'; then
   echo "::error::the app links against libraries inside .build and will not run elsewhere" >&2
   exit 1
 fi
