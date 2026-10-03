@@ -368,15 +368,17 @@ public enum Inflate {
                     guard lengthIndex < Inflate.lengthBase.count else {
                         throw Error.invalidLengthCode(symbol)
                     }
-                    let length = Inflate.lengthBase[lengthIndex]
-                        + try bits(Inflate.lengthExtra[lengthIndex])
+                    // `try` has to cover the whole expression or be split out;
+                    // Swift rejects it to the right of a binary operator.
+                    let lengthExtraBits = try bits(Inflate.lengthExtra[lengthIndex])
+                    let length = Inflate.lengthBase[lengthIndex] + lengthExtraBits
 
                     let distanceSymbol = try decodeSymbol(from: distance)
                     guard distanceSymbol < Inflate.distanceBase.count else {
                         throw Error.invalidDistance(distanceSymbol)
                     }
-                    let back = Inflate.distanceBase[distanceSymbol]
-                        + try bits(Inflate.distanceExtra[distanceSymbol])
+                    let distanceExtraBits = try bits(Inflate.distanceExtra[distanceSymbol])
+                    let back = Inflate.distanceBase[distanceSymbol] + distanceExtraBits
                     guard back <= output.count else { throw Error.invalidDistance(back) }
 
                     // Copied one byte at a time on purpose. DEFLATE allows
