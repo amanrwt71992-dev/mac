@@ -211,6 +211,108 @@ leaves empty paragraphs behind. Reversible and never loses data, which is why it
 
 ---
 
+## F. Found while building the app and the ZIP layer (2026-10-03)
+
+Each of these cost at least one CI cycle to discover, and none of them is
+guessable from documentation. They are recorded because the alternative is paying
+for them twice.
+
+### F1. `NSInputContext` is not exported to Swift on the macOS 27 SDK
+
+**Blocks:** M0.5 (IME), and by extension any claim of non-Latin input support.
+
+A custom text view is supposed to hand AppKit its own input context:
+
+```swift
+private lazy var context = NSInputContext(client: self)
+override var inputContext: NSInputContext? { context }
+```
+
+The compiler reports `cannot find type 'NSInputContext' in scope` with AppKit
+imported. The class exists in Objective-C and is simply not visible from Swift on
+this SDK — the same shape of gap as `kCTFontSymbolicTraitKey` and the
+five-parameter `CTFontCreateCopyWithSymbolicTraits` that forced the layout engine
+onto face names (see E2).
+
+Consequence: no input-method editor attaches, so composition is *impossible*, not
+merely unimplemented. Typing still works because `interpretKeyEvents` falls back
+to `NSResponder.insertText(_:)`.
+
+Two candidate routes, neither yet tried: construct it through the runtime
+(`NSClassFromString("NSInputContext")` plus a `perform`-based `initWithClient:`),
+or add one Objective-C++ file to the package and bridge it. The second is more
+code but is checkable by the compiler instead of by hope.
+
+### F2. `scrollRectToVisible(_:)` was renamed, not deprecated
+
+`NSView.scrollToVisible(_:)` on macOS 27. The old spelling is a hard error, and
+every existing code sample, most documentation and most Stack Overflow answers
+still use it. Recorded so that nobody "modernises" it back.
+
+### F3. `insertText(_:)` and `doCommand(by:)` are asymmetric
+
+Both are requirements of `NSStandardKeyBindingResponding`, which `NSResponder`
+conforms to. `NSResponder` *implements* `doCommand(by:)`, so a subclass must mark
+it `override`. It does *not* implement `insertText(_:)`, so `override` there is a
+compile error and the method needs `@objc` instead, to publish the `insertText:`
+selector that `interpretKeyEvents` dispatches to at runtime. Nothing in the
+headers says which is which; only the compiler will tell you.
+
+### F4. Justified lines render with unstretched gaps
+
+`LayoutLine` stores justification as `justificationExtraPerGap` and
+`justificationGapCount` rather than baking it into the segment advances — correct,
+because a re-layout at a different width must start from unmodified measurements.
+The v1 renderer ignores it, so a justified paragraph draws left-aligned within its
+line box while the caret geometry still uses the measured advances. The two
+disagree on justified text. Fix is to apply the extra as per-gap tracking when
+drawing, which needs the gap positions, not a uniform `.kern`.
+
+### F5. Colour, highlighting and shading are not rendered
+
+Everything draws black. `ResolvedRunStyle` already carries `color`, `highlight`
+and `shading`; the renderer just does not read them. Deliberate for slice 1, so
+that layout and caret geometry could be verified without a second variable in
+play.
+
+### F6. The font substitution policy is currently inert
+
+`FontSubstitution` maps Calibri → Carlito and Cambria → Caladea, and CI asserts
+the table is self-consistent. But no font is bundled yet (`NOTICE` says so
+honestly), and none of those families is installed on a stock Mac. So a document
+asking for Calibri is resolved to Carlito, Carlito is not found, and CoreText
+picks its own fallback — which is not metric-compatible with Calibri, and which
+therefore moves every line break relative to Word.
+
+This is the single largest remaining fidelity risk, and it is invisible in the
+synthetic tests because they use `FixedWidthMeasurer`. Until the fifteen families
+in `NOTICE` are actually vendored into the bundle, "we never ship Calibri but we
+match its metrics" is a claim we cannot make.
+
+### F7. Incomplete Huffman codes must not be rejected by the decoder
+
+Recorded as a warning against a plausible future "fix". DEFLATE's fixed distance
+table assigns 5 bits to 30 of the 32 possible codes and is therefore *always*
+incomplete. A decoder that rejects incompleteness cannot decode any
+fixed-Huffman block, and fixed blocks are what zlib emits for small payloads — so
+most small files, including most `.docx` parts, would fail.
+
+`Inflate.Code.build` returns the number of unused codes and throws only on
+over-subscription, which is unambiguously corrupt. The tolerance rules live in the
+callers, because they differ per table: fixed distance may be incomplete, fixed
+literal/length is complete, a dynamic code-length table must be complete, and a
+dynamic literal/length or distance table may be incomplete only in the
+single-symbol case. Three tests failed before this was understood, including the
+empty stream.
+
+### F8. ZIP sizes must come from the central directory, never the local header
+
+An archive written in streaming mode sets bit 3 of the general-purpose flag and
+stores zeroes in the local header, putting the real values in a trailing data
+descriptor. A reader that trusts the local header sees a zero-length entry and
+silently produces an empty document — no error, just missing text. Word writes
+large documents this way.
+
 ## Summary of recommendations (the short version)
 
 | # | Question | Recommendation |

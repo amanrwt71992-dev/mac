@@ -119,6 +119,38 @@ Deliverables
 
 ---
 
+### M0.5 status — 2026-10-03
+
+Slice 1 shipped and is downloadable. CI builds a release binary, runs it headless
+to prove the shipped executable lays out a real document, assembles `Zenith.app`,
+ad-hoc signs it, and publishes it as an Actions artifact.
+
+Working: a window with paginated US Letter sheets, caret and blinking, click and
+shift-click and drag to select, typing, Backspace, Delete, Return, Tab, arrows
+including vertical movement that remembers the horizontal position it wants to
+return to, Home/End, ⌘A ⌘C ⌘X ⌘V ⌘Z ⇧⌘Z, ⌘B and ⌘I with Word's any-not-bold
+rule, zoom that scales the drawing rather than re-laying out, a status bar, and
+text flowing onto further sheets under widow/orphan and keep-with-next control.
+
+Not working, deliberately rather than accidentally: `.docx` open and save (the
+menu items are disabled, not stubbed), input-method composition, colour, ruler,
+styles gallery, find and replace, tables, images, headers and footers on screen,
+and the assistant.
+
+Still to do in M0.5:
+
+| item | note |
+|---|---|
+| IME / `NSTextInputClient` composition | blocked, see F1 — needs a bridged Objective-C++ file or runtime construction |
+| Ruler | |
+| Performance contract on `xcode-27-xlarge` | needs a 300-page fixture |
+| Font bundling | see F6 — the substitution policy is currently inert |
+| Full Galley → product rename | mechanical, ~48 files, done once the name is settled |
+
+Slice 2 started the same day: `OOXMLKit` with a ZIP reader and a DEFLATE decoder,
+green on Linux and macOS against archives produced by Python. The container is
+done; the OOXML reader is next.
+
 ## M1 — DOCX round trip (≈ 6 weeks)
 
 **Goal:** open real Word files and save them without breaking anything.
